@@ -208,13 +208,7 @@ class ModelInferenceWrapper:
 
         alignz_rotation_matrix = kp_detection_ret["alignz_rotation_matrix"]
 
-        if "pcd_pseudo_worldframe" in kp_detection_ret:
-            observed_pointcloud_modelframe = kp_detection_ret["pcd_pseudo_worldframe"]
-        else:
-            intrinsic = kp_detection_ret["intrinsic"]
-            dep_im = kp_detection_ret["depth_im"]
-            pointcloud_camframe = get_pointcloud(dep_im, intrinsic, camera_extrinsic, frame="camera")
-            observed_pointcloud_modelframe = transform_pointcloud(alignz_rotation_matrix, pointcloud_camframe)
+        observed_pointcloud_modelframe = kp_detection_ret["pcd_pseudo_worldframe"]
 
         all_predicted_traj_modelframe, all_predicted_traj_worldframe = [], []
         for predicted_traj_camframe_centered in predicted_traj_camframe_centered_all:

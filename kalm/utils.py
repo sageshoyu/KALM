@@ -133,6 +133,13 @@ def transform_pointcloud(transform_mat, input_pointcloud, set_invalid=False):
     return transformed_pointcloud
 
 
+def center_crop(rgb_im):
+    im_h, im_w = rgb_im.shape[:2]
+    min_hw = min(im_h, im_w)
+    cropped_image = rgb_im[(im_h - min_hw) // 2: (im_h - min_hw) // 2 + min_hw, (im_w - min_hw) // 2: (im_w - min_hw) // 2 + min_hw]
+    return cropped_image
+
+
 def get_pointcloud(
     dep_im,
     intrinsic,

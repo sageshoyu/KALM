@@ -13,22 +13,9 @@ from featup.util import norm, pca
 from PIL import Image
 from torchvision import transforms as T
 
-from kalm.utils import (
-    GPT_CLIENT_INFO,
-    calc_grid_cell_tlbr,
-    draw_grid,
-    extract_fpfh_feature,
-    farthest_point_sampling,
-    get_alignz_campose,
-    get_pcd,
-    load_pickle_file,
-    normalize_to_01scale,
-    np_to_o3d,
-    preprocess_rgb,
-    smooth_mask,
-    suppress_stdout_stderr,
-    transform_pointcloud,
-)
+from kalm.utils import GPT_CLIENT_INFO, calc_grid_cell_tlbr, draw_grid, extract_fpfh_feature, farthest_point_sampling, \
+    get_alignz_campose, get_pcd, load_pickle_file, normalize_to_01scale, np_to_o3d, preprocess_rgb, smooth_mask, \
+    suppress_stdout_stderr, transform_pointcloud, center_crop
 from kalm.vlm_client import GPTClient
 
 
@@ -379,7 +366,7 @@ class KeypointPredictor:
         guided_mask = np.zeros((self.config.im_size, self.config.im_size))
         for grid_id in gpt_guided_grids:
             grid_tlbr = calc_grid_cell_tlbr(
-                (self.config.im_siz, self.config.im_siz),
+                (self.config.im_size, self.config.im_size),
                 self.gpt_client_info.grid_shape,
                 grid_id - 1,
             )
@@ -416,12 +403,14 @@ class KeypointPredictor:
             ] = False
         return matched_keypoints
 
-    def predict_keypoints_given_training_config(self, query_rgb_im, query_dep_im, intrinsic, extrinsic, query_pcd=None):
+    def predict_keypoints_given_training_config(self, rgb_im, query_dep_im, intrinsic, extrinsic, query_pcd=None):
         assert self.is_loaded_distilled
+
+        query_rgb_im = center_crop(rgb_im)
         query_rgb = preprocess_rgb(query_rgb_im[np.newaxis, ...], self.config.im_size)[0]  # H W 3
         query_dino_feature = self.feature_extractor.extract_feature_from_image(query_rgb_im)  # H W C
         if query_pcd is None:
-            query_pcd = get_pcd(query_dep_im, intrinsic, resize=query_rgb_im.shape[0])  # H W 3
+            query_pcd = get_pcd(query_dep_im, intrinsic, resize=query_rgb.shape[0])  # H W 3
         query_fpfh_feature = extract_fpfh_feature(query_pcd)  # H W 33
 
         if self.config.use_gpt_guided_mask_in_query_image:
@@ -467,13 +456,12 @@ class KeypointPredictor:
         return_dict = {
             "query_rgb_resized": query_rgb,
             "query_pcd_resized": query_pcd,
-            "depth_im": query_dep_im,
-            "intrinsic": intrinsic,
             "camera_pose": extrinsic,
-            "kp_yx_2d": np.array(points_pairs_xy)[..., ::-1],
+            "kp_xy_2d": np.array(points_pairs_xy),
             "kp_feat": np.array(keypoint_feats),
             "kp_xyz_3d_camera": np.array([query_pcd[y, x] for (x, y) in points_pairs_xy]),
             "kp_xyz_3d_pseudoworldframe": np.array(keypoint_pcds),
+            "pcd_pseudo_worldframe": rotated_pointcloud,
             "alignz_rotation_matrix": rotate_matrix,
         }
         return return_dict

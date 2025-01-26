@@ -11,7 +11,7 @@ import trimesh
 from kalm.configs.model_config import EE2CAM, config_mapping
 from kalm.keypoint_predictor import KeypointPredictor
 from kalm.models import ModelInferenceWrapper
-from kalm.robot_policy import initialize_robot_policy
+from kalm.robot_utils import initialize_robot_policy
 from kalm.utils import get_pointcloud
 
 
@@ -51,7 +51,7 @@ def visualize_prediction(
     # visualize 3d
     trimesh_keypoints = trimesh.points.PointCloud(keypoint_pred_3d)
     trimesh_keypoints.colors = np.array([255, 0, 0])
-    trimesh_obspcd = trimesh.points.PointCloud(observed_pointcloud.reshape(-1, 3)[::1000])
+    trimesh_obspcd = trimesh.points.PointCloud(vertices=observed_pointcloud.reshape(-1, 3)[::10], colors=query_rgb.reshape(-1, 3)[::10])
     vis_list = [trimesh_keypoints, trimesh_obspcd]
 
     color_map = plt.get_cmap("gist_rainbow")
@@ -83,12 +83,8 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
 
         kp_detection_ret = keypoint_predictor.predict_keypoints_given_training_config(rgb_im, dep_im, intrinsic, extrinsic)
 
-        (
-            all_predicted_trajectories_modelframe,
-            all_predicted_trajectories_worldframe,
-            observed_pointcloud_modelframe,
-            kp_locs_selected_worldframe,
-        ) = trajectory_predictor.predict_traj(kp_detection_ret, sample_n_trajectories=eval_config.sample_n_trajectories)
+        (all_predicted_trajectories_modelframe, all_predicted_trajectories_worldframe, observed_pointcloud_modelframe,
+         kp_locs_selected_worldframe) = trajectory_predictor.predict_traj(kp_detection_ret, sample_n_trajectories=eval_config.sample_n_trajectories)
 
         pointcloud_worldframe = get_pointcloud(dep_im, intrinsic, extrinsic, near=eval_config.depth_near, frame="world")
         obstacle_cloud_in_world_frame_ = pointcloud_worldframe.reshape(-1, 3)
@@ -107,8 +103,8 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
                 keypoint_predictor,
                 kp_detection_ret["query_rgb_resized"],
                 kp_detection_ret["query_pcd_resized"],
-                kp_detection_ret["kp_yx_2d"],
-                kp_detection_ret[f"kp_xyz_3d_pseudoworld"],
+                kp_detection_ret["kp_xy_2d"],
+                kp_detection_ret["kp_xyz_3d_pseudoworldframe"],
                 observed_pointcloud_modelframe,
                 [x[0] for x in all_predicted_trajectories_modelframe],
             )
@@ -135,7 +131,7 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
                     [
                         kp_detection_ret["query_rgb_resized"],
                         kp_detection_ret["query_pcd_resized"],
-                        kp_detection_ret["kp_yx_2d"],
+                        kp_detection_ret["kp_xy_2d"],
                         kp_locs_selected_worldframe,
                         ending_conf_prepose,
                         arm_path_to_traj_ee_0,
@@ -163,7 +159,7 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
         (
             resized_query_image,
             cropped_query_pcd,
-            kp_yx_on_image,
+            kp_xy_on_image,
             kp_locs_selected_worldframe,
             ending_conf_prepose,
             arm_path_to_traj_ee_0,
@@ -179,7 +175,7 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
                 keypoint_predictor,
                 resized_query_image,
                 cropped_query_pcd,
-                kp_yx_on_image,
+                kp_xy_on_image,
                 kp_locs_selected_worldframe,
                 pointcloud_worldframe,
                 [predicted_ee_poses_in_world_frame_mat4],
@@ -232,7 +228,7 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
             "ee_pose": current_ee_pose,
             "init_qpos": current_joint_conf,
             "keypoints_3d": kp_locs_selected_worldframe,
-            "keypoints_2d": kp_yx_on_image,
+            "keypoints_2d": kp_xy_on_image,
             "traj_mat4": predicted_ee_poses_in_world_frame_mat4,
             "keypoint_feats": kp_feats_selected,
         }
