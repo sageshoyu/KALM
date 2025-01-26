@@ -1,4 +1,4 @@
 GPT_ORGANIZATION_KEY = ""
 GPT_PROJECT_KEY = ""
 GPT_API_KEY = ""
-SAM_CKPT = "./sam_vit_h_4b8939.pth"
+SAM_CKPT = None

@@ -2,6 +2,7 @@ import base64
 import os
 
 import cv2
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
 from openai import OpenAI
@@ -337,6 +338,15 @@ class MaskPredictor:
     def __init__(self, sam_ckpt_path=None, device=None):
         if sam_ckpt_path is None:
             sam_ckpt_path = local_config.SAM_CKPT
+
+        if sam_ckpt_path is None:
+            cache_dir = os.path.expanduser('./cache')
+            sam_ckpt_path = os.path.join(cache_dir, "sam_vit_h_4b8939.pth")
+            if not os.path.exists(sam_ckpt_path):
+                os.makedirs(cache_dir, exist_ok=True)
+                print(f'Downloading SAM checkpoint to {sam_ckpt_path}')
+                torch.hub.download_url_to_file('https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth', sam_ckpt_path)
+
         self.sam = sam_model_registry["vit_h"](checkpoint=sam_ckpt_path).to(device)
         self.predictor = SamPredictor(self.sam)
 

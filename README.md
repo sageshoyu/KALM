@@ -34,10 +34,9 @@ Install the dependencies using conda:
 conda env create -f environment.yaml
 conda activate kalm
 pip install git+https://github.com/mhamilton723/FeatUp
-wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth # download the SAM model
 ```
 
-Fill in the OpenAI API key in the config.
+Fill in the OpenAI API key in the config (`GPT_API_KEY`).
 
 ```bash
 cp kalm/configs/local_config_template.py kalm/configs/local_config.py
@@ -57,12 +56,13 @@ Note: The example data may not pass the verification check. You can use your own
 
 ##### Data Format
 
+We assume RGB images and point cloud (in camera frame) as input .
 The data is stored in a `.npz` file with the following format:
 
 ```python
 {
     'reference_video_rgb': np.array,  # (N, 512, 512, 3)
-    'reference_video_pcd': np.array,  # (N, 256, 256, 3)
+    'reference_video_pcd': np.array,  # (N, 256, 256, 3), in camera frame
     'verification_dataset': [
         {
             'ee_poses_worldframe_trajectory': np.array,  # (T, 4, 4)
@@ -70,7 +70,7 @@ The data is stored in a `.npz` file with the following format:
             'joint_q_trajectory': np.array,  # (T, 7)
             'extrinsic': np.array,  # (4, 4)
             'observed_rgb': np.array,  # (512, 512, 3)
-            'observed_pcd': np.array,  # (256, 256, 3)
+            'observed_pcd': np.array,  # (256, 256, 3), in camera frame
         } * N
     ]
 }

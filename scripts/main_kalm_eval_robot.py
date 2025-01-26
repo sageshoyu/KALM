@@ -185,10 +185,6 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
                 [predicted_ee_poses_in_world_frame_mat4],
             )
 
-        continue_or_not = input(f"Safe to execute? Press Enter to execute. Press R to return.")
-        if continue_or_not.strip().lower().startswith("r"):
-            return None
-
         if eval_config.wait_gripper:
             gripper_repeat_n = 15
             gripper_open_idx = (gripper_isopen_selected < 0.5).tolist().index(True)
@@ -246,6 +242,7 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
 
 
 def free_motion(config, robot_policy):
+    # Test generalization to different camera views
     while True:
         print("Enter free motion mode")
         robot_policy.robot_controller.free_motion(gripper_open=True, timeout=config.freemotion_timeout)
