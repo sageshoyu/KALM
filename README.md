@@ -52,8 +52,6 @@ You can specify the prompt (task name and description) in `TASKNAME2DESC` in `ka
 python -m scripts.main_kalm_distill_keypoints --save_path keypoint_files/example  --task_name drawer  --data_path keypoint_files/drawer_example_traj.npz
 ```
 
-Note: The example data may not pass the verification check. You can use your own data.
-
 ##### Data Format
 
 We assume RGB images and point cloud (in camera frame) as input .
@@ -81,7 +79,7 @@ The data is stored in a `.npz` file with the following format:
 Train the keypoint-conditioned policy. The parameters could be found in the script.
 
 ```bash
-bash scripts/train_kp_traj.sh
+bash scripts/train_kalmdiffuser.sh
 ```
 
 #### Real Robot Evaluation

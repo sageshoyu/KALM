@@ -94,7 +94,7 @@ def get_pcd(dep, intrinsic, resize=None, far=1.5, near=0.1):
     pcd_hw3 = pcd.reshape(h, w, 3)
     pcd_hw3[dep > far] = 0
     pcd_hw3[dep < near] = 0
-    # pcd_hw3[dep == 0] = 0
+    pcd_hw3[dep == 0] = 0
     if resize is not None:
         # do center crop
         assert h < w
@@ -116,7 +116,7 @@ def np_to_o3d(array):
     return pcd
 
 
-def transform_pointcloud(transform_mat, input_pointcloud):
+def transform_pointcloud(transform_mat, input_pointcloud, set_invalid=False):
     """
     Transform a point cloud with tform mat
     Args:
@@ -128,6 +128,8 @@ def transform_pointcloud(transform_mat, input_pointcloud):
     """
     original_pointcloud_hom = np.concatenate((input_pointcloud, np.ones((input_pointcloud.shape[0], 1))), axis=1)
     transformed_pointcloud = transform_mat.dot(original_pointcloud_hom.T)[:3].T
+    if set_invalid:
+        transformed_pointcloud[(input_pointcloud == 0).all(axis=1)] = 0
     return transformed_pointcloud
 
 

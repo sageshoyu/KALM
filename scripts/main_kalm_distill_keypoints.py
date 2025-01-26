@@ -47,9 +47,9 @@ def read_data_from_file(data_path: str, video_subsample_num_frames: int, input_s
 
     Returns:
         reference_video_rgb:  RGB NHWC numpy image 0-255. Reference video
-        reference_video_pcd:  Numpy array of point cloud. Corresponding point cloud of the reference_video_rgb
+        reference_video_pcd:  Numpy array of point cloud. Corresponding point cloud of the reference_video_rgb, in camera frame
         verification_rgbs: RGB NHWC numpy image 0-255. Images to verify the keypoint proposals
-        verification_pcds: Numpy array of point cloud. Corresponding point cloud of the verification_rgbs
+        verification_pcds: Numpy array of point cloud. Corresponding point cloud of the verification_rgbs, in camera frame
         verification_dataset_robot_trajectories
     """
     data = np.load(data_path, allow_pickle=True)
@@ -355,58 +355,47 @@ def main(args):
     gpt_prev_iter_mask = None
     for iter_i in range(args.max_iter_num):
         print(f">>>>>>>>>>>>>Finding consistent points. Iteration {iter_i + 1}")
-        if not args.cached_gpt:
-            mask_selected, gpt_returned_msg = obtain_mask_from_gpt_and_sam(
-                gpt_client,
-                mask_predictor,
-                task_desc,
-                reference_video_rgbs,
-                pcd=reference_pcd_frame0,
-                grid_shape=GRID_SHAPE,
-                vis=args.debug_level >= 1,
-                gpt_prev_iter_msg=gpt_prev_iter_mask,
-                iter_n=iter_i,
+        mask_selected, gpt_returned_msg = obtain_mask_from_gpt_and_sam(
+            gpt_client,
+            mask_predictor,
+            task_desc,
+            reference_video_rgbs,
+            pcd=reference_pcd_frame0,
+            grid_shape=GRID_SHAPE,
+            vis=args.debug_level >= 1,
+            gpt_prev_iter_msg=gpt_prev_iter_mask,
+            iter_n=iter_i,
+        )
+        gpt_prev_iter_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected], cm=[[1, 0, 0]])
+        if mask_selected is None:
+            continue
+        mask_selected[ref_invalid_map] = 0
+        ref_image_with_selected_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected])
+        gpt_client_info = GPT_CLIENT_INFO(
+            gpt_client=gpt_client,
+            previous_messages=gpt_returned_msg,
+            ref_image_with_masks=ref_image_with_selected_mask,
+            sequence=reference_video_rgbs,
+            query_image=None,
+            task_desc=task_desc,
+            grid_shape=GRID_SHAPE,
+        )
+        with open("gpt_client_info.pkl", "wb") as f:
+            pickle.dump(
+                {
+                    "mask": mask_selected,
+                    "info": GPT_CLIENT_INFO(
+                        gpt_client=None,
+                        previous_messages=gpt_returned_msg,
+                        ref_image_with_masks=ref_image_with_selected_mask,
+                        sequence=reference_video_rgbs,
+                        query_image=None,
+                        task_desc=task_desc,
+                        grid_shape=GRID_SHAPE,
+                    ),
+                },
+                f,
             )
-            gpt_prev_iter_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected], cm=[[1, 0, 0]])
-            if mask_selected is None:
-                continue
-            mask_selected[ref_invalid_map] = 0
-            ref_image_with_selected_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected])
-            gpt_client_info = GPT_CLIENT_INFO(
-                gpt_client=gpt_client,
-                previous_messages=gpt_returned_msg,
-                ref_image_with_masks=ref_image_with_selected_mask,
-                sequence=reference_video_rgbs,
-                query_image=None,
-                task_desc=task_desc,
-                grid_shape=GRID_SHAPE,
-            )
-            with open("gpt_client_info.pkl", "wb") as f:
-                pickle.dump(
-                    {
-                        "mask": mask_selected,
-                        "info": GPT_CLIENT_INFO(
-                            gpt_client=None,
-                            previous_messages=gpt_returned_msg,
-                            ref_image_with_masks=ref_image_with_selected_mask,
-                            sequence=reference_video_rgbs,
-                            query_image=None,
-                            task_desc=task_desc,
-                            grid_shape=GRID_SHAPE,
-                        ),
-                    },
-                    f,
-                )
-        else:
-            with open("gpt_client_info.pkl", "rb") as f:
-                gpt_cached = pickle.load(f)
-            mask_selected, gpt_client_info = gpt_cached["mask"], gpt_cached["info"]
-            mask_selected = cv2.resize(
-                mask_selected.astype(np.uint8),
-                (args.im_size, args.im_size),
-                interpolation=cv2.INTER_NEAREST,
-            ).astype(bool)
-            gpt_client_info.gpt_client = gpt_client
 
         reference_image_record.part_mask = mask_selected
         consistent_matches_on_all_query_ims = find_consistent_match_points_on_all_query_images(
@@ -515,7 +504,7 @@ def save_as_kalmdiffuser_record(
         )
 
         pointcloud_camera_frame = verification_image_record.pcd
-        pointcloud_alignz_frame = transform_pointcloud(rotate_matrix, pointcloud_camera_frame.reshape(-1, 3)).reshape(*verification_image_record.pcd.shape[:2], 3)
+        pointcloud_alignz_frame = transform_pointcloud(rotate_matrix, pointcloud_camera_frame.reshape(-1, 3), set_invalid=True).reshape(*verification_image_record.pcd.shape[:2], 3)
         keypoint_3dloc_alignz_frame = np.array([pointcloud_alignz_frame[y, x] for (y, x) in matched_keypoint_yx])
 
         if True:
@@ -556,7 +545,7 @@ class KeypointDistillArguments(tap.Tap):
     task_name: str
     debug_level: int = 0
     max_iter_num: int = 4
-    use_gpt_guided_mask_in_query_image: bool = False
+    use_gpt_guided_mask_in_query_image: bool = True
 
     # Feature extraction parameters
     fpfh_radius: float = 0.03
@@ -578,8 +567,6 @@ class KeypointDistillArguments(tap.Tap):
 
     # Training set parameters
     n_kp_in_training_set: int = 8
-
-    cached_gpt: bool = False
 
 
 if __name__ == "__main__":

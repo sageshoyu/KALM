@@ -398,21 +398,23 @@ class KeypointPredictor:
         # Find n matching keypoints
         if image2_guide_mask is None:
             image2_guide_mask = np.ones(image2_record.rgb.shape[:2]).astype(bool)
-        matched_keypoints_yx = []
+        matched_keypoints = []
         for ref_point_xy in self.ref_points_xy:
-            matched_keypoint_yx = self.find_one_matching_point(
+            matched_keypoint = self.find_one_matching_point(
                 self.reference_image_record,
                 image2_record,
                 image1_reference_point=ref_point_xy,
                 matching_algo_params=self.matching_algo_params,
                 guided_mask=image2_guide_mask
             )
-            matched_keypoints_yx.append(matched_keypoint_yx)
+            matched_keypoints.append(matched_keypoint)
             # Set the neighorhood of the matched keypoint to be invalid in the guided mask
-            y, x = matched_keypoint_yx
-            image2_guide_mask[max(0, y - discount_neighborhood_pixel_range):min(image2_record.rgb.shape[0],y + discount_neighborhood_pixel_range),
-                                max(0, x - 5):min(image2_record.rgb.shape[1], x + 5)] = False
-        return matched_keypoints_yx
+            x, y = matched_keypoint
+            image2_guide_mask[
+                max(0, y - discount_neighborhood_pixel_range):min(image2_record.rgb.shape[0], y + discount_neighborhood_pixel_range),
+                max(0, x - 5):min(image2_record.rgb.shape[1], x + 5)
+            ] = False
+        return matched_keypoints
 
     def predict_keypoints_given_training_config(self, query_rgb_im, query_dep_im, intrinsic, extrinsic, query_pcd=None):
         assert self.is_loaded_distilled
@@ -435,7 +437,7 @@ class KeypointPredictor:
             fpfh_feature=query_fpfh_feature,
         )
         print(f"Find matching keypoints.")
-        points_pairs_ij = self.find_n_matching_keypoints(query_image_record, image2_guide_mask=guided_mask)
+        points_pairs_xy = self.find_n_matching_keypoints(query_image_record, image2_guide_mask=guided_mask)
 
         if self.config.vis_level >= 1:
             fig, ax = plt.subplots(1, 3, figsize=(10, 5))
@@ -448,18 +450,18 @@ class KeypointPredictor:
             color_map = plt.get_cmap("gist_rainbow")
             colors = [color_map((i + 1) / len(self.ref_points_xy)) for i in range(len(self.ref_points_xy))]
             ax[0].scatter([pt[0] for pt in self.ref_points_xy], [pt[1] for pt in self.ref_points_xy], c=colors, s=20)
-            ax[2].scatter([pt[1] for pt in points_pairs_ij], [pt[0] for pt in points_pairs_ij], c=colors, s=20)
+            ax[2].scatter([pt[0] for pt in points_pairs_xy], [pt[1] for pt in points_pairs_xy], c=colors, s=20)
             plt.show()
             plt.close()
 
         updated_campose = get_alignz_campose(extrinsic)
         rotate_matrix = np.linalg.inv(updated_campose).dot(extrinsic)
-        rotated_pointcloud = transform_pointcloud(rotate_matrix, query_pcd.reshape(-1, 3)).reshape(*query_pcd.shape[:2], 3)
-        keypoint_pcds = [rotated_pointcloud[y, x] for (y, x) in points_pairs_ij]
+        rotated_pointcloud = transform_pointcloud(rotate_matrix, query_pcd.reshape(-1, 3), set_invalid=True).reshape(*query_pcd.shape[:2], 3)
+        keypoint_pcds = [rotated_pointcloud[y, x] for (x, y) in points_pairs_xy]
 
         query_dino_feats_numpy = query_dino_feature.detach().cpu().numpy()
-        keypoint_feats_dino = np.array([query_dino_feats_numpy[:, y, x] for (y, x) in points_pairs_ij])
-        keypoint_feats_fpfh = np.array([query_fpfh_feature[:, y, x] for (y, x) in points_pairs_ij])
+        keypoint_feats_dino = np.array([query_dino_feats_numpy[y, x] for (x, y) in points_pairs_xy])
+        keypoint_feats_fpfh = np.array([query_fpfh_feature[y, x] for (x, y) in points_pairs_xy])
         keypoint_feats = np.concatenate((keypoint_feats_dino, np.repeat(keypoint_feats_fpfh, 10, axis=1)), axis=1).astype(np.float32)
 
         return_dict = {
@@ -468,9 +470,9 @@ class KeypointPredictor:
             "depth_im": query_dep_im,
             "intrinsic": intrinsic,
             "camera_pose": extrinsic,
-            'kp_yx_2d': np.array(points_pairs_ij),
+            "kp_yx_2d": np.array(points_pairs_xy)[..., ::-1],
             "kp_feat": np.array(keypoint_feats),
-            'kp_xyz_3d_camera': np.array([query_pcd[y, x] for (y, x) in points_pairs_ij]),
+            "kp_xyz_3d_camera": np.array([query_pcd[y, x] for (x, y) in points_pairs_xy]),
             "kp_xyz_3d_pseudoworldframe": np.array(keypoint_pcds),
             "alignz_rotation_matrix": rotate_matrix,
         }
