@@ -197,13 +197,11 @@ class PandaPybulletController(RobotController):
         camera_image_size = [480, 640]
         camera_fov_w = 69.40
         camera_focal_length = (float(camera_image_size[1]) / 2) / np.tan((np.pi * camera_fov_w / 180) / 2)
-        intrinsics = np.array(
-            [
-                [camera_focal_length, 0, float(camera_image_size[1]) / 2],
-                [0, camera_focal_length, float(camera_image_size[0]) / 2],
-                [0, 0, 1],
-            ]
-        )
+        intrinsics = np.array([
+            [camera_focal_length, 0, float(camera_image_size[1]) / 2],
+            [0, camera_focal_length, float(camera_image_size[0]) / 2],
+            [0, 0, 1],
+        ])
         robotjoint = self.robot.get_joint_positions_by_names(self.joint_names)
         if self.camera_intrinsics is None:
             self.camera_intrinsics = intrinsics
@@ -239,6 +237,60 @@ class PandaPybulletController(RobotController):
 
     def reset_error(self):
         pass
+
+
+class PandaRealworldDummyController(RobotController):
+    def __init__(self, urdf_path, tool_link_name, image_example, camera_intrinsics):
+        super().__init__(urdf_path, tool_link_name)
+        self.image_example = image_example
+        self.camera_intrinsics = camera_intrinsics
+
+    def get_camera_param_and_robotjoint(self):
+        if self.camera_intrinsics is None:
+            rgb_image, dep_image, intrinsics = self.capture_image()
+            joint_by_name = self.get_current_joint_confs()
+            im_h, im_w = dep_image.shape
+            self.camera_intrinsics = intrinsics
+            self.image_dim = [im_h, im_w]
+            return im_h, im_w, intrinsics, joint_by_name
+        else:
+            joint_by_name = self.get_current_joint_confs()
+            im_h, im_w = self.image_dim
+            return im_h, im_w, self.camera_intrinsics, joint_by_name
+
+    def capture_image(self):
+        return self.image_example
+
+    def execute_cartesian_impedance_path(self, poses, gripper_isopen, speed_factor=3):
+        print(f'execute_cartesian_impedance_path: {poses} gripper_isopen={gripper_isopen} speed_factor={speed_factor}')
+        return True
+
+    def execute_joint_impedance_path(self, poses, gripper_isopen: list, speed_factor=3):
+        print(f'execute_joint_impedance_path: {poses} gripper_isopen={gripper_isopen} speed_factor={speed_factor}')
+        return True
+
+    def open_gripper(self):
+        print('open_gripper')
+        return True
+
+    def close_gripper(self):
+        print('close_gripper')
+        return True
+
+    def get_current_joint_confs(self):
+        return {'qpos': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+
+    def go_to_home(self, gripper_open=False):
+        print(f'go_to_home: gripper_open={gripper_open}')
+        return True
+
+    def free_motion(self, gripper_open=False, timeout=3.0):
+        print(f'free_motion: gripper_open={gripper_open} timeout={timeout}')
+        return True
+
+    def reset_joint_to(self, qpos, gripper_open=False):
+        print(f'reset_joint_to: {qpos} gripper_open={gripper_open}')
+        return True
 
 
 class PandaRealworldController(RobotController):
