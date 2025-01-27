@@ -4,7 +4,6 @@ import numpy as np
 import trimesh
 from torch.nn import functional as F
 
-"""Shared utilities for all main scripts. (3d diffuser actor)"""
 import os
 import random
 
@@ -54,25 +53,15 @@ class BaseTrainTester:
         g.manual_seed(0)
         train_loader = DataLoader(
             train_dataset,
-            batch_size=self.args.batch_size,
-            shuffle=True,
-            num_workers=self.args.num_workers,
-            worker_init_fn=seed_worker,
-            collate_fn=collate_fn,
-            pin_memory=True,
-            drop_last=True,
-            generator=g,
+            batch_size=self.args.batch_size, shuffle=True, drop_last=True,
+            num_workers=self.args.num_workers, worker_init_fn=seed_worker,
+            collate_fn=collate_fn, pin_memory=True, generator=g,
         )
         test_loader = DataLoader(
             test_dataset,
-            batch_size=self.args.batch_size_val,
-            shuffle=False,
-            num_workers=self.args.num_workers,
-            worker_init_fn=seed_worker,
-            collate_fn=collate_fn,
-            pin_memory=True,
-            drop_last=False,
-            generator=g,
+            batch_size=self.args.batch_size_val, shuffle=False, drop_last=False,
+            num_workers=self.args.num_workers, worker_init_fn=seed_worker,
+            collate_fn=collate_fn, pin_memory=True, generator=g,
         )
         return train_loader, test_loader
 
@@ -197,24 +186,18 @@ class BaseTrainTester:
         """Save checkpoint if requested."""
         if new_loss is None or best_loss is None or new_loss <= best_loss:
             best_loss = new_loss
-            torch.save(
-                {
-                    "weight": model.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "iter": step_id + 1,
-                    "best_loss": best_loss,
-                },
-                self.args.log_dir / "best.pth",
-            )
-        torch.save(
-            {
+            torch.save({
                 "weight": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "iter": step_id + 1,
                 "best_loss": best_loss,
-            },
-            self.args.log_dir / "last.pth",
-        )
+            }, self.args.log_dir / "best.pth")
+        torch.save({
+            "weight": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "iter": step_id + 1,
+            "best_loss": best_loss,
+        }, self.args.log_dir / "last.pth")
         return best_loss
 
 

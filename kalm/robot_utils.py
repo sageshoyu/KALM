@@ -16,7 +16,7 @@ from pybullet_planning.motion_planners.rrt_connect import birrt  # https://githu
 from kalm.pybullet_utils import create_floor, LockRenderer, WorldSaver, body_collision, connect, create_sphere, get_all_links, \
     get_client, get_joint_position, get_joint_positions, get_joints, get_link_name, get_link_names, get_link_pose, get_self_link_pairs, \
     joint_from_name, link_from_name, load_pybullet, pairwise_link_collision, pose_from_tform, set_client, set_joint_position, \
-    set_joint_positions, set_point, tform_from_pose
+    set_joint_positions, set_point, tform_from_pose, get_image
 
 print_log = print
 
@@ -24,23 +24,19 @@ print_log = print
 VERBOSE = True
 FR3_CONTROLLER_ADDR = ""
 
-DEOXYS_EE2CAM = np.array(
-    [
-        [0.01019998, -0.99989995, 0.01290367, 0.03649885],
-        [0.9999, 0.0103, 0.0057, -0.034889],
-        [-0.00580004, 0.01280367, 0.99989995, -0.04260014],
-        [0.0, 0.0, 0.0, 1.0],
-    ]
-)
+DEOXYS_EE2CAM = np.array([
+    [0.01019998, -0.99989995, 0.01290367, 0.03649885],
+    [0.9999, 0.0103, 0.0057, -0.034889],
+    [-0.00580004, 0.01280367, 0.99989995, -0.04260014],
+    [0.0, 0.0, 0.0, 1.0],
+])
 
-CAM2HAND = np.array(
-    [
-        [0.01021377, 0.99993106, -0.00579259, 0.03485788],
-        [-0.99986457, 0.0102875, 0.01284563, 0.03608995],
-        [0.01290433, 0.0056606, 0.99990071, -0.0596676],
-        [0.0, 0.0, 0.0, 1.0],
-    ]
-)
+CAM2HAND = np.array([
+    [0.01021377, 0.99993106, -0.00579259, 0.03485788],
+    [-0.99986457, 0.0102875, 0.01284563, 0.03608995],
+    [0.01290433, 0.0056606, 0.99990071, -0.0596676],
+    [0.0, 0.0, 0.0, 1.0],
+])
 
 
 def sample_pc(pc, num_samples=400):
@@ -141,12 +137,8 @@ class IKSolver_Wrapper:
         self.urdf_model = urdf_model
 
     # from skill_learning_for_tamp/pybullet_utils.py
-    def solve(
-        self,
-        tool_pose,
-        seed_conf=None,
-        pos_tolerance=1e-4,
-        ori_tolerance=math.radians(5e-2),
+    def solve(self, tool_pose, seed_conf=None,
+        pos_tolerance=1e-4, ori_tolerance=math.radians(5e-2)
     ):
         # will use random seed_conf if seed_conf is None
         tform = tform_from_pose(tool_pose)
@@ -312,34 +304,22 @@ class PandaRealworldController(RobotController):
         return rgb, smoothed, intrinsics
 
     def execute_cartesian_impedance_path(self, poses, gripper_isopen, speed_factor=3):
-        self.socket.send(
-            zlib.compress(
-                pickle.dumps(
-                    {
-                        "message_name": "execute_posesmat4_osc",
-                        "ee_poses": poses,
-                        "speed_factor": speed_factor,
-                        "gripper_isopen": gripper_isopen,
-                    }
-                )
-            )
-        )
+        self.socket.send(zlib.compress(pickle.dumps({
+            "message_name": "execute_posesmat4_osc",
+            "ee_poses": poses,
+            "speed_factor": speed_factor,
+            "gripper_isopen": gripper_isopen,
+        })))
         message = pickle.loads(zlib.decompress(self.socket.recv()))
         return message
 
     def execute_joint_impedance_path(self, poses, gripper_isopen: list, speed_factor=3):
-        self.socket.send(
-            zlib.compress(
-                pickle.dumps(
-                    {
-                        "message_name": "execute_joint_impedance_path",
-                        "joint_confs": poses,
-                        "gripper_isopen": gripper_isopen,
-                        "speed_factor": speed_factor,
-                    }
-                )
-            )
-        )
+        self.socket.send(zlib.compress(pickle.dumps({
+            "message_name": "execute_joint_impedance_path",
+            "joint_confs": poses,
+            "gripper_isopen": gripper_isopen,
+            "speed_factor": speed_factor,
+        })))
         message = pickle.loads(zlib.decompress(self.socket.recv()))
         return message
 
@@ -364,32 +344,20 @@ class PandaRealworldController(RobotController):
         return message["success"]
 
     def free_motion(self, gripper_open=False, timeout=3.0):
-        self.socket.send(
-            zlib.compress(
-                pickle.dumps(
-                    {
-                        "message_name": "free_motion_control",
-                        "gripper_open": gripper_open,
-                        "timeout": timeout,
-                    }
-                )
-            )
-        )
+        self.socket.send(zlib.compress(pickle.dumps({
+            "message_name": "free_motion_control",
+            "gripper_open": gripper_open,
+            "timeout": timeout,
+        })))
         message = pickle.loads(zlib.decompress(self.socket.recv()))
         return message["success"]
 
     def reset_joint_to(self, qpos, gripper_open=False):
-        self.socket.send(
-            zlib.compress(
-                pickle.dumps(
-                    {
-                        "message_name": "reset_joint_to",
-                        "gripper_open": gripper_open,
-                        "qpos": qpos,
-                    }
-                )
-            )
-        )
+        self.socket.send(zlib.compress(pickle.dumps({
+            "message_name": "reset_joint_to",
+            "gripper_open": gripper_open,
+            "qpos": qpos,
+        })))
         message = pickle.loads(zlib.decompress(self.socket.recv()))
         return message["success"]
 
@@ -518,12 +486,8 @@ class PandaPolicy:
         return check_collision
 
     def plan_workspace_motion(
-        self,
-        waypoint_poses7d,
-        waypoint_grippers,
-        obstacle_pointcloud,
-        start_conf=None,
-        trim_traj=True,
+        self, waypoint_poses7d, waypoint_grippers, obstacle_pointcloud,
+        start_conf=None, trim_traj=True,
     ):
         if start_conf is None:
             start_conf = self.robot_controller.get_current_joint_confs()["qpos"][:7]
@@ -647,13 +611,8 @@ class PandaPolicy:
         return arm_path_flat_trimmed, grippers_path_flat_trimmed
 
     def compute_arm_path_to_trajee0(
-        self,
-        target_ee_poses_mat4: list,
-        target_grippers: list,
-        obstacle_cloud_in_world_frame,
-        start_conf=None,
-        dense_interpolate_fac=1,
-        trim_traj=True,
+        self, target_ee_poses_mat4: list, target_grippers: list, obstacle_cloud_in_world_frame,
+        start_conf=None, dense_interpolate_fac=1, trim_traj=True,
     ):
         target_panda_hand_poses_mat4 = []
         for target_ee_poses_mat4 in target_ee_poses_mat4:
@@ -708,4 +667,3 @@ def initialize_robot_policy(debug=False):
     robot_policy = setup_panda_pybullet(panda_path)
     p.setRealTimeSimulation(False, physicsClientId=sim_id)
     return robot_policy
-    #########################

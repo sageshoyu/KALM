@@ -6,7 +6,6 @@ import torch
 from einops import rearrange
 from einops.layers.torch import Rearrange
 from torch import nn
-from torch.nn import functional as F
 
 
 @dataclass
@@ -57,13 +56,7 @@ class Conv1dBlock(nn.Module):
         super().__init__()
 
         self.block = nn.Sequential(
-            nn.Conv1d(
-                inp_channels,
-                out_channels,
-                kernel_size,
-                padding=kernel_size // 2,
-                padding_mode="replicate",
-            ),
+            nn.Conv1d(inp_channels, out_channels, kernel_size, padding=kernel_size // 2, padding_mode="replicate"),
             Rearrange("batch channels horizon -> batch channels 1 horizon"),
             nn.GroupNorm(n_groups, out_channels),
             Rearrange("batch channels 1 horizon -> batch channels horizon"),
@@ -185,7 +178,6 @@ class Upsample1d(nn.Module):
 
 
 class TemporalUnet_diffuser(nn.Module):
-
     def __init__(self, traj_len, transition_dim, dim=128, dim_mults=(1, 2, 4, 8), n_kp=6):
         super().__init__()
 
@@ -209,15 +201,11 @@ class TemporalUnet_diffuser(nn.Module):
         for ind, (dim_in, dim_out) in enumerate(in_out):
             is_last = ind >= (num_resolutions - 1)
 
-            self.downs.append(
-                nn.ModuleList(
-                    [
-                        ResidualTemporalBlock(dim_in, dim_out, embed_dim=cond_dim, horizon=traj_len),
-                        ResidualTemporalBlock(dim_out, dim_out, embed_dim=cond_dim, horizon=traj_len),
-                        Downsample1d(dim_out) if not is_last else nn.Identity(),
-                    ]
-                )
-            )
+            self.downs.append(nn.ModuleList([
+                ResidualTemporalBlock(dim_in, dim_out, embed_dim=cond_dim, horizon=traj_len),
+                ResidualTemporalBlock(dim_out, dim_out, embed_dim=cond_dim, horizon=traj_len),
+                Downsample1d(dim_out) if not is_last else nn.Identity(),
+            ]))
 
             if not is_last:
                 traj_len = traj_len // 2
@@ -229,15 +217,11 @@ class TemporalUnet_diffuser(nn.Module):
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out[1:])):
             is_last = ind >= (num_resolutions - 1)
 
-            self.ups.append(
-                nn.ModuleList(
-                    [
-                        ResidualTemporalBlock(dim_out * 2, dim_in, embed_dim=cond_dim, horizon=traj_len),
-                        ResidualTemporalBlock(dim_in, dim_in, embed_dim=cond_dim, horizon=traj_len),
-                        Upsample1d(dim_in) if not is_last else nn.Identity(),
-                    ]
-                )
-            )
+            self.ups.append(nn.ModuleList([
+                ResidualTemporalBlock(dim_out * 2, dim_in, embed_dim=cond_dim, horizon=traj_len),
+                ResidualTemporalBlock(dim_in, dim_in, embed_dim=cond_dim, horizon=traj_len),
+                Upsample1d(dim_in) if not is_last else nn.Identity(),
+            ]))
 
             if not is_last:
                 traj_len = traj_len * 2

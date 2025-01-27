@@ -1,9 +1,6 @@
 import glob
 import os
 import pickle
-from typing import Optional
-
-import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import tap
@@ -11,28 +8,10 @@ import torch
 import trimesh
 
 import kalm.configs.local_config as local_config
-from kalm.keypoint_predictor import (
-    DINOFeatureExtractor,
-    ImageRecord,
-    KeypointPredictor,
-    MatchingAlgoParams,
-)
-from kalm.utils import (
-    GPT_CLIENT_INFO,
-    approx_equal,
-    calc_grid_cell_tlbr,
-    draw_grid,
-    draw_seg_on_im,
-    extract_fpfh_feature,
-    farthest_point_sampling,
-    get_alignz_campose,
-    plot_points,
-    preprocess_pcd,
-    preprocess_rgb,
-    sample_farthest_points_from_selected_masked_area,
-    save_files,
-    transform_pointcloud,
-)
+from kalm.keypoint_predictor import DINOFeatureExtractor, ImageRecord, KeypointPredictor, MatchingAlgoParams
+from kalm.utils import GPT_CLIENT_INFO
+from kalm.utils import approx_equal, calc_grid_cell_tlbr, draw_grid, draw_seg_on_im, extract_fpfh_feature, farthest_point_sampling, get_alignz_campose, plot_points
+from kalm.utils import preprocess_pcd, preprocess_rgb, sample_farthest_points_from_selected_masked_area, save_files, transform_pointcloud
 from kalm.vlm_client import GRID_SHAPE, TASKNAME2DESC, GPTClient, MaskPredictor
 
 
@@ -177,12 +156,8 @@ def masks_from_sam_nms(
     for gpt_return_coordinate in grid:
         grid_tlbr = calc_grid_cell_tlbr(image.shape[:2], grid_shape, gpt_return_coordinate - 1)  # GPT is 1-indexed
         masks1, scores1, points1 = mask_predictor.get_candidate_masks_in_grid(
-            image,
-            *grid_tlbr,
-            min_distance=10,
-            pcd=pcd,
-            remove_degenerate=remove_degenerate,
-            vis=False,
+            image, *grid_tlbr,
+            min_distance=10, pcd=pcd, remove_degenerate=remove_degenerate, vis=False,
         )
         for msk, score, pt in zip(masks1, scores1, points1):
             for mask_already_picked in masks:
@@ -205,10 +180,7 @@ def masks_from_sam_nms(
 
     masked_image_list = list()
     for i in range(len(masks)):
-        np.save(
-            os.path.join(gpt_client.cache_dir, f"iter_{iter_n:02d}_sammask_{i:02d}.npy"),
-            masks[i],
-        )
+        np.save(os.path.join(gpt_client.cache_dir, f"iter_{iter_n:02d}_sammask_{i:02d}.npy"), masks[i])
         masked_image_list.append(draw_seg_on_im(image, [masks[i]], plot_anno=[(i + 1, points[i][0])], cm=mask_color_list))
     return masks, masked_image_list, points
 
@@ -381,21 +353,18 @@ def main(args):
             grid_shape=GRID_SHAPE,
         )
         with open("gpt_client_info.pkl", "wb") as f:
-            pickle.dump(
-                {
-                    "mask": mask_selected,
-                    "info": GPT_CLIENT_INFO(
-                        gpt_client=None,
-                        previous_messages=gpt_returned_msg,
-                        ref_image_with_masks=ref_image_with_selected_mask,
-                        sequence=reference_video_rgbs,
-                        query_image=None,
-                        task_desc=task_desc,
-                        grid_shape=GRID_SHAPE,
-                    ),
-                },
-                f,
-            )
+            pickle.dump({
+                "mask": mask_selected,
+                "info": GPT_CLIENT_INFO(
+                    gpt_client=None,
+                    previous_messages=gpt_returned_msg,
+                    ref_image_with_masks=ref_image_with_selected_mask,
+                    sequence=reference_video_rgbs,
+                    query_image=None,
+                    task_desc=task_desc,
+                    grid_shape=GRID_SHAPE,
+                 )
+            }, f)
 
         reference_image_record.part_mask = mask_selected
         consistent_matches_on_all_query_ims = find_consistent_match_points_on_all_query_images(
@@ -518,16 +487,14 @@ def save_as_kalmdiffuser_record(
             pcd4.colors = np.array([0, 0.5, 1.0])
             trimesh.Scene([pcd1, pcd2, pcd3, pcd4]).show()
 
-        dataset.append(
-            {
-                "keypoint_xyz": keypoint_3dloc_alignz_frame,
-                "keypoint_feats_dino": feats_dino_kp,
-                "keypoint_feats_fpfh": feats_fpfh_kp,
-                "ee_poses_trajectory": ee_poses_trajectory,
-                "gripper_openness_trajectory": trajectory_data["gripper_openness_trajectory"],
-                "joint_q_trajectory": trajectory_data["joint_q_trajectory"],
-            }
-        )
+        dataset.append({
+            "keypoint_xyz": keypoint_3dloc_alignz_frame,
+            "keypoint_feats_dino": feats_dino_kp,
+            "keypoint_feats_fpfh": feats_fpfh_kp,
+            "ee_poses_trajectory": ee_poses_trajectory,
+            "gripper_openness_trajectory": trajectory_data["gripper_openness_trajectory"],
+            "joint_q_trajectory": trajectory_data["joint_q_trajectory"],
+        })
 
     print(f"Saving to {save_path}_train.npz")
     np.savez_compressed(f"{save_path}_train", data=dataset)

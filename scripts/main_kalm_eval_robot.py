@@ -273,18 +273,14 @@ def benchmarking(benchmarking_config):
         free_motion(benchmarking_config, robot_policy)
         init_qpos = robot_policy.robot_controller.get_current_joint_confs()["qpos"].copy()
 
-        for config_i, (keypoint_predictor, trajectory_predictor, config) in enumerate(
-            zip(
-                keypoint_predictors,
-                trajectory_predictors,
-                benchmarking_config.individual_configs,
-            )
-        ):
+        for config_i, (keypoint_predictor, trajectory_predictor, config) in enumerate(zip(
+            keypoint_predictors, trajectory_predictors, benchmarking_config.individual_configs,
+        )):
             statistics_config_i = run_policy(robot_policy, keypoint_predictor, trajectory_predictor, config)
             if statistics_config_i is None:
                 print(f"Config {config_i} execution error.")
                 statistics_config_i = {}
-            np.savez_compressed(os.path.join(benchmarking_config.save_dir,f"iter_{run_num:02d}_config_{config_i:02d}"),statistics_config_i)
+            np.savez_compressed(os.path.join(benchmarking_config.save_dir, f"iter_{run_num:02d}_config_{config_i:02d}"), statistics_config_i)
             robot_policy.robot_controller.reset_joint_to(init_qpos, gripper_open=True)
             print(f"Robot going home.")
             input("keep going?")

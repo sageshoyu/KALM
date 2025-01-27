@@ -257,22 +257,14 @@ def is_degenerated_mask(
 
     mask, is_modified = remove_trivial_regions(
         mask,
-        partial(
-            is_valid,
-            area_thres=min_area_threshold * 1.5,
-            bbox_len_thres=narrow_area_threshold,
-        ),
+        partial(is_valid, area_thres=min_area_threshold * 1.5, bbox_len_thres=narrow_area_threshold),
         mode="holes",
     )
     if not is_valid(mask, min_area_threshold, narrow_area_threshold):
         return np.zeros_like(mask).astype(bool), True
     mask, is_modified = remove_trivial_regions(
         mask,
-        partial(
-            is_valid,
-            area_thres=min_area_threshold,
-            bbox_len_thres=narrow_area_threshold,
-        ),
+        partial(is_valid, area_thres=min_area_threshold, bbox_len_thres=narrow_area_threshold),
         mode="islands",
     )
     if not is_valid(mask, min_area_threshold, narrow_area_threshold):
@@ -373,14 +365,10 @@ def calc_grid_cell_tlbr(image_shape: tuple[int, int], grid_shape: tuple[int, int
 
 
 def draw_text(
-    img,
-    text,
+    img, text,
     font=cv2.FONT_HERSHEY_PLAIN,
     pos=(0, 0),
-    font_scale=3,
-    font_thickness=2,
-    text_color=(0, 255, 0),
-    text_color_bg=(0, 0, 0),
+    font_scale=3, font_thickness=2, text_color=(0, 255, 0), text_color_bg=(0, 0, 0),
 ):
     x, y = pos
     text_size, _ = cv2.getTextSize(text, font, font_scale, font_thickness)
@@ -508,12 +496,9 @@ def plot_keypoints(img, vertices_yx: list[list], label_start_id=0, all_label_num
 
 
 def plot_points(
-    im1,
-    points_plot1_xy,
-    im2=None,
-    points_plot2_xy=None,
-    save_name_prefix=None,
-    vis=True,
+    im1, points_plot1_xy,
+    im2=None, points_plot2_xy=None,
+    save_name_prefix=None, vis=True,
 ):
     if im2 is None:
         im2 = im1

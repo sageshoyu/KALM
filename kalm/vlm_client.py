@@ -9,14 +9,7 @@ from openai import OpenAI
 from segment_anything import SamPredictor, sam_model_registry
 
 import kalm.configs.local_config as local_config
-from kalm.utils import (
-    approx_equal,
-    draw_grid,
-    draw_seg_on_im,
-    extract_tag_content,
-    is_degenerated_mask,
-    resize_to,
-)
+from kalm.utils import approx_equal, draw_grid, draw_seg_on_im, extract_tag_content, is_degenerated_mask, resize_to
 
 GRID_SHAPE = (5, 5)
 
@@ -48,11 +41,8 @@ class GPTClient:
             return base64.b64encode(image_file.read()).decode("utf-8")
 
     def obtain_GPT_coordinate(
-        self,
-        task_desc,
-        sequence: np.ndarray,
-        grid_shape: tuple[int],
-        outerloop_iter_k=0,
+        self, task_desc, sequence: np.ndarray,
+        grid_shape: tuple[int], outerloop_iter_k=0,
     ):
         """
         Prompt GPT to obtain an x,y coordinate of the task relevant part.
@@ -91,31 +81,19 @@ class GPTClient:
             encoded_image = base64.b64encode(encoded_file[1]).decode("utf-8")
             b64_images.append(encoded_image)
 
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    *[
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{im_i}"},
-                        }
-                        for im_i in b64_images
-                    ],
-                    {"type": "text", "text": instruction + "\n" + img_prompt},
-                ],
-            }
-        ]
+        messages = [{
+            "role": "user", "content": [
+                *[{ "type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{im_i}"}} for im_i in b64_images],
+                {"type": "text", "text": instruction + "\n" + img_prompt},
+            ],
+        }]
 
         gpt_return_result = self.client.chat.completions.create(model="gpt-4o", messages=messages)
         return messages, gpt_return_result
 
     def obtain_GPT_coordinate_auto(
-        self,
-        task_desc,
-        sequence: np.ndarray,
-        grid_shape: tuple[int, int],
-        max_retries: int = 3,
+        self, task_desc, sequence: np.ndarray,
+        grid_shape: tuple[int, int], max_retries: int = 3,
     ) -> tuple[list, list]:
         for i in range(max_retries):
             try:
@@ -133,12 +111,8 @@ class GPTClient:
         raise RuntimeError("GPT call failed.")
 
     def obtain_GPT_mask(
-        self,
-        previous_messages,
-        image_with_masks_firstframe,
-        task_desc,
-        gpt_prev_iter_msg=None,
-        iter_n=0,
+        self, previous_messages, image_with_masks_firstframe, task_desc,
+        gpt_prev_iter_msg=None, iter_n=0,
     ):
         b64_images = list()  #  base64 encoded images
         if isinstance(image_with_masks_firstframe, list):
@@ -171,33 +145,19 @@ class GPTClient:
             encoded_image = base64.b64encode(encoded_file[1]).decode("utf-8")
             b64_images.append(encoded_image)
 
-        messages = previous_messages + [
-            {
-                "role": "user",
-                "content": [
-                    *[
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{im_i}"},
-                        }
-                        for im_i in b64_images
-                    ],
-                    {"type": "text", "text": instruction},
-                ],
-            }
-        ]
+        messages = previous_messages + [{
+            "role": "user", "content": [
+                *[{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{im_i}"}} for im_i in b64_images],
+                {"type": "text", "text": instruction},
+            ],
+        }]
 
         gpt_return_result = self.client.chat.completions.create(model="gpt-4o", messages=messages)
         return gpt_return_result, messages
 
     def obtain_GPT_mask_auto(
-        self,
-        previous_messages,
-        image_with_masks_firstframe,
-        task_desc,
-        max_retries=3,
-        gpt_prev_iter_msg=None,
-        iter_n=0,
+        self, previous_messages, image_with_masks_firstframe, task_desc,
+        max_retries=3, gpt_prev_iter_msg=None, iter_n=0,
     ):
         for i in range(max_retries):
             try:
@@ -224,15 +184,8 @@ class GPTClient:
         raise RuntimeError("GPT call failed.")
 
     def obtain_GPT_mask_on_query_image(
-        self,
-        previous_messages,
-        ref_image_with_masks,
-        sequence,
-        query_image,
-        task_desc,
-        grid_shape: tuple[int],
-        query_im_index=0,
-        iter_n=0,
+        self, previous_messages, ref_image_with_masks, sequence, query_image, task_desc,
+        grid_shape: tuple[int], query_im_index=0, iter_n=0,
     ):
         """
         Prompt GPT to obtain an x,y coordinate of the task relevant part.
@@ -283,24 +236,12 @@ class GPTClient:
         encoded_image = base64.b64encode(encoded_file[1]).decode("utf-8")
         b64_images.append(encoded_image)
 
-        messages = previous_messages + [
-            {
-                "role": "user",
-                "content": [
-                    *[
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{im_i}"},
-                        }
-                        for im_i in b64_images
-                    ],
-                    {
-                        "type": "text",
-                        "text": instruction + "\n" + img_prompt + "\n" + ending_prompt,
-                    },
-                ],
-            }
-        ]
+        messages = previous_messages + [{
+            "role": "user", "content": [
+                *[{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{im_i}"}} for im_i in b64_images],
+                {"type": "text", "text": instruction + "\n" + img_prompt + "\n" + ending_prompt},
+            ]
+        }]
 
         gpt_return_result = self.client.chat.completions.create(model="gpt-4o", messages=messages)
         return gpt_return_result, messages
@@ -351,16 +292,9 @@ class MaskPredictor:
         self.predictor = SamPredictor(self.sam)
 
     def get_candidate_masks_in_grid(
-        self,
-        im: np.ndarray,
-        top: float,
-        left: float,
-        bottom: float,
-        right: float,
-        min_distance: float = 10,
-        conf_thr=0.88,
-        pcd: np.ndarray = None,
-        remove_degenerate: bool = True,
+        self, im: np.ndarray, top: float, left: float, bottom: float, right: float,
+        min_distance: float = 10, conf_thr=0.88,
+        pcd: np.ndarray = None, remove_degenerate: bool = True,
         vis: bool = False,
     ) -> tuple:
         self.predictor.set_image(im)

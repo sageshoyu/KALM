@@ -36,12 +36,8 @@ class KpEncodedInput:
 
 class KalmDiffuser(nn.Module):
     def __init__(
-        self,
-        unet_embedding_dim=60,
-        diffusion_timesteps=100,
-        traj_len=50,
-        n_kp=8,
-        kp_feat_dim=714,
+        self, unet_embedding_dim=60,
+        diffusion_timesteps=100, traj_len=50, n_kp=8, kp_feat_dim=714,
     ):
         super().__init__()
 
@@ -97,12 +93,7 @@ class KalmDiffuser(nn.Module):
 
         # Iterative denoising
         timesteps_all = self.position_noise_scheduler.timesteps
-        timesteps_all = torch.cat(
-            (
-                timesteps_all,
-                torch.tensor(np.array([3] * 5 + [2] * 5 + [1] * 15 + [0] * 15)),
-            )
-        )
+        timesteps_all = torch.cat((timesteps_all, torch.tensor(np.array([3] * 5 + [2] * 5 + [1] * 15 + [0] * 15))))
         for t in timesteps_all:
             timesteps = t * torch.ones(len(noisy_trajectory)).to(noisy_trajectory.device).long()
             out_dict = self.prediction_head(noisy_trajectory, timesteps, fixed_inputs_oriframe)
@@ -144,11 +135,11 @@ class KalmDiffuser(nn.Module):
 
         # Sample a random timestep
         timesteps = torch.randint(
-            0,
-            self.position_noise_scheduler.config.num_train_timesteps,
+            0, self.position_noise_scheduler.config.num_train_timesteps,
             (gt_trajectory.shape[0],),
+            dtype=torch.long,
             device=gt_trajectory.device,
-        ).long()
+        )
         noise_9d, noisy_trajectory_9d = self.sample_noisy_traj(gt_trajectory[..., :9], timesteps)  # ?. B 1 9
         pred_dict = self.prediction_head(noisy_trajectory_9d, timesteps, keypoints_encoded)
         return noise_9d, pred_dict

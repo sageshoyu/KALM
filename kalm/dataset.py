@@ -5,17 +5,12 @@ import torch
 import trimesh
 from scipy.interpolate import CubicSpline, interp1d
 
-from kalm.rotation_utils import (
-    euler2mat,
-    get_ortho6d_from_rotation_matrix,
-    matrix_to_quaternion,
-    normalise_quat,
-    quaternion_to_matrix,
-)
+from torch.utils.data.dataset import Dataset
+from kalm.rotation_utils import euler2mat, get_ortho6d_from_rotation_matrix, matrix_to_quaternion, normalise_quat, quaternion_to_matrix
 
 
 class TrajectoryInterpolator:
-    """Interpolate a trajectory to have fixed length."""
+    """Interpolate a trajectory to have a fixed length."""
 
     def __init__(self, use=True, interpolation_length=50):
         self._use = use
@@ -25,6 +20,7 @@ class TrajectoryInterpolator:
         assert trajectory.shape[1] == 8  # pos, wxyz, gripper
         if not self._use:
             return trajectory
+
         trajectory = trajectory.numpy()
         # Calculate the current number of steps
         old_num_steps = len(trajectory)
@@ -49,19 +45,11 @@ class TrajectoryInterpolator:
         return resampled
 
 
-class KeypointDataset(torch.utils.data.Dataset):
+class KeypointDataset(Dataset):
     def __init__(
-        self,
-        dataset_path,
-        num_iters=100000,
-        training=True,
-        interpolation_length=50,
-        n_kp=8,
-        vis=False,
-        augment_axis=None,
-        return_augment_matrix=False,
-        augment_perturbpoint_numpoint=4,
-        augment_rotate_range=np.pi / 2,
+        self, dataset_path, num_iters=100000, training=True,
+        interpolation_length=50, n_kp=8, vis=False,
+        augment_axis=None, return_augment_matrix=False, augment_perturbpoint_numpoint=4, augment_rotate_range=np.pi / 2,
     ):
         self.vis = vis
         self._num_iters = num_iters
@@ -150,6 +138,7 @@ class KeypointDataset(torch.utils.data.Dataset):
         ee_poses_trajectory[:, :3, 3] -= pcd_center
 
         aug_tform = np.eye(4)
+
         if self._training:
             # random pertubation first
             if self.augment_perturbpoint_numpoint > 0:
@@ -162,14 +151,10 @@ class KeypointDataset(torch.utils.data.Dataset):
                 keypoint_feats_fpfh[perturb_id] += feats_fpfh_perturb
 
             aug_tform, ee_poses_trajectory = self.rotate_aug(ee_poses_trajectory)
-            keypoint_xyz = (
-                torch.bmm(
-                    aug_tform.unsqueeze(0).repeat(keypoint_xyz.shape[0], 1, 1).float(),
-                    torch.tensor(keypoint_xyz).unsqueeze(2).float(),
-                )
-                .squeeze(2)
-                .numpy()
-            )
+            keypoint_xyz = torch.bmm(
+                aug_tform.unsqueeze(0).repeat(keypoint_xyz.shape[0], 1, 1).float(),
+                torch.tensor(keypoint_xyz).unsqueeze(2).float(),
+            ).squeeze(2).numpy()
 
         # Get action tensors for respective frame ids
         action_pos = ee_poses_trajectory[:, :3, 3]
@@ -195,13 +180,7 @@ class KeypointDataset(torch.utils.data.Dataset):
             trimesh.Scene([pcd_obs, pcd_traj]).show()
 
         ret_dict = {
-            "keypoints_feat": torch.cat(
-                (
-                    torch.tensor(keypoint_feats_dino).float(),
-                    torch.tensor(keypoint_feats_fpfh).float().repeat(1, 10),
-                ),
-                dim=1,
-            ),  # K dim
+            "keypoints_feat": torch.cat((torch.tensor(keypoint_feats_dino).float(), torch.tensor(keypoint_feats_fpfh).float().repeat(1, 10)), dim=1),  # K dim
             "keypoints_xyz": torch.tensor(keypoint_xyz).float(),  # K 3
             "gt_trajectory": action_interpolated_dim10.float(),  # (n_frames, 10-dof), target poses
         }
@@ -226,6 +205,7 @@ def visualize_trajectory():
             ret_dict["gt_trajectory"][:, :3].shape[0],
         )
         pcd_all.append(pcd)
+
     trimesh.Scene(pcd_all).show()
 
 

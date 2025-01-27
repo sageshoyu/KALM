@@ -1,9 +1,6 @@
-import os
-import pickle
 from dataclasses import dataclass, field
 from typing import Optional
 
-import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -11,9 +8,10 @@ import torch.nn.functional as F
 import torchvision
 from featup.util import norm, pca
 from PIL import Image
-from torchvision import transforms as T
+import torchvision.transforms as T
+import torchvision.transforms.functional as TF
 
-from kalm.utils import GPT_CLIENT_INFO, calc_grid_cell_tlbr, draw_grid, extract_fpfh_feature, farthest_point_sampling, \
+from kalm.utils import calc_grid_cell_tlbr, draw_grid, extract_fpfh_feature, farthest_point_sampling, \
     get_alignz_campose, get_pcd, load_pickle_file, normalize_to_01scale, np_to_o3d, preprocess_rgb, smooth_mask, \
     suppress_stdout_stderr, transform_pointcloud, center_crop
 from kalm.vlm_client import GPTClient
@@ -85,7 +83,7 @@ class DINOFeatureExtractor:
         image_pil = Image.fromarray(image.astype(np.uint8)).convert("RGB")
         image_tensor = self.transform(image_pil).unsqueeze(0).to(self.device)
         extracted_feature = self.dino_feature_extractor(image_tensor)[0]
-        extracted_feature = torchvision.transforms.functional.resize(extracted_feature, size=self.output_size)
+        extracted_feature = TF.resize(extracted_feature, size=self.output_size)
         return extracted_feature.permute(1, 2, 0).detach()
 
 
@@ -118,12 +116,8 @@ class KeypointPredictor:
 
     @torch.no_grad()
     def find_one_matching_point(
-        self,
-        image1: ImageRecord,
-        image2: ImageRecord,
-        image1_reference_point: list,
-        matching_algo_params: MatchingAlgoParams,
-        guided_mask: np.ndarray = None,
+        self, image1: ImageRecord, image2: ImageRecord, image1_reference_point: list,
+        matching_algo_params: MatchingAlgoParams, guided_mask: np.ndarray = None,
     ):
         """
 
@@ -188,11 +182,7 @@ class KeypointPredictor:
         return arg_x, arg_y
 
     def is_feature_distinctive(
-        self,
-        image1: ImageRecord,
-        image2: ImageRecord,
-        image1_reference_point: list,
-        image2_reference_point: list,
+        self, image1: ImageRecord, image2: ImageRecord, image1_reference_point: list, image2_reference_point: list,
         matching_algo_params: MatchingAlgoParams,
     ):
         ori_dino_feat = image1.dino_feature[image1_reference_point[1], image1_reference_point[0]].unsqueeze(0).unsqueeze(0)  # 1 1 384
@@ -221,12 +211,8 @@ class KeypointPredictor:
 
     @torch.no_grad()
     def find_consistent_match(
-        self,
-        image1: ImageRecord,
-        image2: ImageRecord,
-        highlight_points_xy: list,
-        matching_algo_params: MatchingAlgoParams,
-        guided_mask: np.ndarray = None,
+        self, image1: ImageRecord, image2: ImageRecord,
+        highlight_points_xy: list, matching_algo_params: MatchingAlgoParams, guided_mask: np.ndarray = None,
     ):
         """
         Args:
@@ -252,11 +238,8 @@ class KeypointPredictor:
         """
         im_h, im_w, _ = image1.rgb.shape
         arg_x1_on_query_im, arg_y1_on_query_im = self.find_one_matching_point(
-            image1,
-            image2,
-            highlight_points_xy,
-            matching_algo_params=matching_algo_params,
-            guided_mask=guided_mask,
+            image1, image2, highlight_points_xy,
+            matching_algo_params=matching_algo_params, guided_mask=guided_mask,
         )
 
         argmax_image2_xy = [arg_x1_on_query_im, arg_y1_on_query_im]
@@ -310,12 +293,10 @@ class KeypointPredictor:
         is_consistent = len(good_match_query_yx) / n_sample_points_in_neighborhood >= matching_algo_params.thr_goodmatch_ratio
 
         if is_consistent and matching_algo_params.debug_level >= 1:
-            [feat1_pca, feat2_pca], _ = pca(
-                [
-                    image1.dino_feature.permute(2, 0, 1).unsqueeze(0),
-                    image2.dino_feature.permute(2, 0, 1).unsqueeze(0),
-                ]
-            )
+            [feat1_pca, feat2_pca], _ = pca([
+                image1.dino_feature.permute(2, 0, 1).unsqueeze(0),
+                image2.dino_feature.permute(2, 0, 1).unsqueeze(0),
+            ])
             plt.clf()
             plt.close()
             fig, ax = plt.subplots(1, 6, figsize=(15, 5))
@@ -377,10 +358,8 @@ class KeypointPredictor:
 
     @torch.no_grad()
     def find_n_matching_keypoints(
-            self,
-            image2_record: ImageRecord,
-            image2_guide_mask: Optional[np.ndarray] = None,
-            discount_neighborhood_pixel_range=5
+        self, image2_record: ImageRecord, image2_guide_mask: Optional[np.ndarray] = None,
+        discount_neighborhood_pixel_range=5
     ):
         # Find n matching keypoints
         if image2_guide_mask is None:
