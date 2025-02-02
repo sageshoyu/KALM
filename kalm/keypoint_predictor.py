@@ -382,14 +382,18 @@ class KeypointPredictor:
             ] = False
         return matched_keypoints
 
-    def predict_keypoints_given_training_config(self, rgb_im, query_dep_im, intrinsic, extrinsic, query_pcd=None):
-        assert self.is_loaded_distilled
+    def predict_keypoints_given_training_config(self, rgb_im, extrinsic, dep_im=None, intrinsic=None, pcd_im=None):
+        assert self.is_loaded_distilled, "The keypoint predictor should be loaded with distilled keypoints."
+
+        assert (dep_im is not None and intrinsic is not None) or pcd_im is not None, "Either dep_im and intrinsic or pcd_im should be provided."
 
         query_rgb_im = center_crop(rgb_im)
         query_rgb = preprocess_rgb(query_rgb_im[np.newaxis, ...], self.config.im_size)[0]  # H W 3
         query_dino_feature = self.feature_extractor.extract_feature_from_image(query_rgb_im)  # H W C
-        if query_pcd is None:
-            query_pcd = get_pcd(query_dep_im, intrinsic, resize=query_rgb.shape[0])  # H W 3
+        if pcd_im is None:
+            query_pcd = get_pcd(dep_im, intrinsic, resize=query_rgb.shape[0])  # H W 3
+        else:
+            query_pcd = pcd_im
         query_fpfh_feature = extract_fpfh_feature(query_pcd)  # H W 33
 
         if self.config.use_gpt_guided_mask_in_query_image:

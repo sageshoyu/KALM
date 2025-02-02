@@ -12,7 +12,6 @@ import zmq
 
 import kalm.configs.path_config as path_config
 
-from pybullet_planning.motion_planners.rrt_connect import birrt  # https://github.com/caelan/pybullet-planning/
 from kalm.pybullet_utils import create_floor, LockRenderer, WorldSaver, body_collision, connect, create_sphere, get_all_links, \
     get_client, get_joint_position, get_joint_positions, get_joints, get_link_name, get_link_names, get_link_pose, get_self_link_pairs, \
     joint_from_name, link_from_name, load_pybullet, pairwise_link_collision, pose_from_tform, set_client, set_joint_position, \
@@ -152,10 +151,14 @@ class IKSolver_Wrapper:
 
 
 class RobotController:
-    def __init__(self, urdf_path, tool_link_name):
+    def __init__(self, urdf_path, tool_link_name, use_ik=True):
         self.urdf_path = urdf_path
-        self.ik_solver: IKSolver_Wrapper = self.create_ik_solver(tool_link_name)
-        self.joint_names = self.ik_solver.ik_solver.joint_names
+        if use_ik:
+            self.ik_solver: IKSolver_Wrapper = self.create_ik_solver(tool_link_name)
+            self.joint_names = self.ik_solver.ik_solver.joint_names
+        else:
+            self.ik_solver = None
+            self.joint_names = None
 
     def create_ik_solver(self, tool_link_name):
         tracik_solver, urdf_model = self.create_tracik_solver(tool_link_name)
@@ -240,10 +243,34 @@ class PandaPybulletController(RobotController):
 
 
 class PandaRealworldDummyController(RobotController):
-    def __init__(self, urdf_path, tool_link_name, image_example, camera_intrinsics):
-        super().__init__(urdf_path, tool_link_name)
-        self.image_example = image_example
-        self.camera_intrinsics = camera_intrinsics
+    def __init__(self, urdf_path, tool_link_name):
+        super().__init__(urdf_path, tool_link_name, use_ik=False)
+        self.image_rgb = None
+        self.image_depth = None
+        self.image_pcd = None
+        self.camera_intrinsics = None
+        self.camera_extrinsic = None
+
+    def load_dummy_data(self, path):
+        data = np.load(path, allow_pickle=True)
+
+        if "rgb" in data:
+            self.image_rgb = data["rgb"]
+        else:
+            raise ValueError("No rgb image found")
+
+        if "extrinsic" in data:
+            self.camera_extrinsic = data["extrinsic"]
+        else:
+            raise ValueError("No camera extrinsic found")
+
+        if "depth" in data and "intrinsic" in data:
+            self.image_depth = data["depth"]
+            self.camera_intrinsics = data["intrinsic"]
+        elif "pcd" in data:
+            self.image_pcd = data["pcd"]
+        else:
+            raise ValueError("Either depth and intrinsic or pcd is needed")
 
     def get_camera_param_and_robotjoint(self):
         if self.camera_intrinsics is None:
@@ -259,37 +286,40 @@ class PandaRealworldDummyController(RobotController):
             return im_h, im_w, self.camera_intrinsics, joint_by_name
 
     def capture_image(self):
-        return self.image_example
+        return self.image_rgb, self.image_depth, self.camera_intrinsics
+
+    def capture_pcd(self):
+        return self.image_rgb, self.image_pcd
 
     def execute_cartesian_impedance_path(self, poses, gripper_isopen, speed_factor=3):
-        print(f'execute_cartesian_impedance_path: {poses} gripper_isopen={gripper_isopen} speed_factor={speed_factor}')
+        print(f"execute_cartesian_impedance_path: {poses} gripper_isopen={gripper_isopen} speed_factor={speed_factor}")
         return True
 
     def execute_joint_impedance_path(self, poses, gripper_isopen: list, speed_factor=3):
-        print(f'execute_joint_impedance_path: {poses} gripper_isopen={gripper_isopen} speed_factor={speed_factor}')
+        print(f"execute_joint_impedance_path: {poses} gripper_isopen={gripper_isopen} speed_factor={speed_factor}")
         return True
 
     def open_gripper(self):
-        print('open_gripper')
+        print("open_gripper")
         return True
 
     def close_gripper(self):
-        print('close_gripper')
+        print("close_gripper")
         return True
 
     def get_current_joint_confs(self):
-        return {'qpos': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+        return {"qpos": np.zeros(7), "ee_pose": np.zeros(6)}
 
     def go_to_home(self, gripper_open=False):
-        print(f'go_to_home: gripper_open={gripper_open}')
+        print(f"go_to_home: gripper_open={gripper_open}")
         return True
 
     def free_motion(self, gripper_open=False, timeout=3.0):
-        print(f'free_motion: gripper_open={gripper_open} timeout={timeout}')
+        print(f"free_motion: gripper_open={gripper_open} timeout={timeout}")
         return True
 
     def reset_joint_to(self, qpos, gripper_open=False):
-        print(f'reset_joint_to: {qpos} gripper_open={gripper_open}')
+        print(f"reset_joint_to: {qpos} gripper_open={gripper_open}")
         return True
 
 
@@ -429,7 +459,10 @@ class PandaPolicy:
 
     def get_nonbase_links(self):
         non_base_links = self.robot_pybullet.get_links()
-        non_base_links.remove(self.robot_pybullet.link_from_name(self.robot_controller.ik_solver.urdf_model._base_link))
+        if self.robot_controller.ik_solver is not None:
+            non_base_links.remove(self.robot_pybullet.link_from_name(self.robot_controller.ik_solver.urdf_model._base_link))
+        else:
+            print("No ik solver")
         return non_base_links
 
     def get_camera_param(self):
@@ -592,6 +625,11 @@ class PandaPolicy:
         return interpolated_path
 
     def plan_arm_path_given_conf(self, confs, grippers, obstaclecloud=None, trim_traj=True):
+        try:
+            from pybullet_planning.motion_planners.rrt_connect import birrt  # https://github.com/caelan/pybullet-planning
+        except ImportError:
+            raise ImportError("Please install pybullet-planning (https://github.com/caelan/pybullet-planning)")
+
         lower, upper = self.robot_controller.ik_solver.ik_solver.joint_limits
         jointlimit_scale = upper - lower
 
@@ -697,7 +735,7 @@ class PandaPolicy:
         self.robot_controller.reset_error()
 
 
-def setup_panda_pybullet(panda_path):
+def setup_panda_pybullet(panda_path, dummy=False):
     print(panda_path)
     floor_in_pb = create_floor()
     robot_body_pybullet = load_pybullet(panda_path, fixed_base=True)
@@ -706,16 +744,19 @@ def setup_panda_pybullet(panda_path):
         camera_link_name="camera_color_optical_frame",
         floor_pybullet_body=floor_in_pb,
     )
-    robot_controller = PandaRealworldController(urdf_path=panda_path, tool_link_name="panda_hand")
+    if dummy:
+        robot_controller = PandaRealworldDummyController(urdf_path=panda_path, tool_link_name="panda_hand")
+    else:
+        robot_controller = PandaRealworldController(urdf_path=panda_path, tool_link_name="panda_hand")
     policy = PandaPolicy(robot_pybullet, robot_controller)
     return policy
 
 
-def initialize_robot_policy(debug=False):
+def initialize_robot_policy(debug=False, dummy=False):
     sim_id = connect(use_gui=debug)
     set_client(sim_id)
     panda_path = "panda_arm_hand_cam.urdf"
     panda_path = osp.join(path_config.KALM_ASSETS_ROOT, panda_path)
-    robot_policy = setup_panda_pybullet(panda_path)
+    robot_policy = setup_panda_pybullet(panda_path, dummy=dummy)
     p.setRealTimeSimulation(False, physicsClientId=sim_id)
     return robot_policy

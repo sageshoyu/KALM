@@ -8,7 +8,8 @@ videos/
 vlm/FeatUp
 kalm/configs/local_config.py
 keypoint_files/**
-!keypoint_files/*.npz
+!keypoint_files/drawer_example_traj.npz
+!keypoint_files/drawer_verification.npz
 scripts/**
 !scripts/*.py
 !scripts/*.sh

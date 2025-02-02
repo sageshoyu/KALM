@@ -10,6 +10,8 @@
 [Tomás Lozano-Pérez](https://people.csail.mit.edu/tlp/),
 [Leslie Pack Kaelbling](https://people.csail.mit.edu/lpk/)
 <br />
+ICRA 2025
+<br />
 CoRL Workshop on Language and Robot Learning, 2024. <span style="color:#CC3333">Best Paper Award</span>
 <br />
 [[Paper]](http://arxiv.org/abs/2410.23254)
@@ -82,9 +84,38 @@ Train the keypoint-conditioned policy. The parameters could be found in the scri
 bash scripts/train_kalmdiffuser.sh
 ```
 
-#### Real Robot Evaluation
+#### Evaluation
 
-Run the real robot evaluation. You can add your own task in `configs/model_config.py`.
+We provide evaluation for dummy robot and real robot. You can add your own task in `configs/model_config.py`.
+
+##### Dummy Robot from File
+
+Run the dummy robot evaluation with observation from file.
+
+```bash
+python -m scripts.main_kalm_eval_robot --task drawer --dummy_data_path keypoint_files/drawer_example.npz
+```
+
+###### Data Format
+
+We support both point cloud and depth image with intrinsic as input.
+The data is stored in a `.npz` file with the following format:
+
+```python
+{
+    'rgb': np.array, 
+    'extrinsic': np.array, 
+    # either
+    'pcd': np.array, # in camera frame
+    # or
+    'depth': np.array, 
+    'intrinsic': np.array,
+}
+```
+
+##### Real Robot
+
+Run the real robot evaluation.
 
 ```bash
 python -m scripts.main_kalm_eval_robot --task drawer
