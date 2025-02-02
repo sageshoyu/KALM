@@ -75,7 +75,7 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
         # Assuming gripper camera. Please update according to the camera setup
         extrinsic = current_ee_pose.dot(EE2CAM)
     else:
-        extrinsic = robot_policy.robot_controller.camera_extrinsic
+        extrinsic = robot_policy.robot_controller.get_camera_extrinsic()
 
     # Sample trajectories
     all_results = []
@@ -83,16 +83,9 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
         print(f">>>>>>>>>>>>>>>> Evaluating matching proposal {matching_proposal_i}")
         result_matching_proposal_i = []
 
-        if not dummy or (dummy and robot_policy.robot_controller.image_pcd is None):
-            # Using depth and intrinsic to get pointcloud
-            rgb_im, dep_im, intrinsic = robot_policy.capture_image()
-            kp_detection_ret = keypoint_predictor.predict_keypoints_given_training_config(
-                rgb_im=rgb_im, dep_im=dep_im, intrinsic=intrinsic, extrinsic=extrinsic
-            )
-        else:
-            # Using image and pcd from dummy data
-            rgb_im, pcd_im = robot_policy.robot_controller.capture_pcd()
-            kp_detection_ret = keypoint_predictor.predict_keypoints_given_training_config(rgb_im=rgb_im, extrinsic=extrinsic, pcd_im=pcd_im)
+        # Using depth and intrinsic to get pointcloud
+        rgb_im, dep_im, intrinsic = robot_policy.capture_image()
+        kp_detection_ret = keypoint_predictor.predict_keypoints_given_training_config(rgb_im, dep_im, intrinsic, extrinsic)
 
         (
             all_predicted_trajectories_modelframe,

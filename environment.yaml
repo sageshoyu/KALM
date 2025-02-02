@@ -7,7 +7,7 @@ dependencies:
   - python=3.10
   - pip
   - pip:
-    - numpy
+    - numpy==1.26.4
     - einops
     - typed-argument-parser
     - tqdm

@@ -7,8 +7,6 @@ from typing import Dict, List
 
 import numpy as np
 import pybullet as p
-import yourdfpy
-import zmq
 
 import kalm.configs.path_config as path_config
 
@@ -117,6 +115,7 @@ class PybulletRobot:
 
 # from skill_learning_for_tamp/pybullet_utils.py
 def load_asset(asset_path):
+    import yourdfpy
     urdf_model = yourdfpy.URDF.load(
         asset_path,
         build_scene_graph=True,
@@ -131,7 +130,7 @@ def load_asset(asset_path):
 
 
 class IKSolver_Wrapper:
-    def __init__(self, ik_solver, urdf_model: yourdfpy.URDF):
+    def __init__(self, ik_solver, urdf_model: "yourdfpy.URDF"):
         self.ik_solver = ik_solver
         self.urdf_model = urdf_model
 
@@ -151,9 +150,9 @@ class IKSolver_Wrapper:
 
 
 class RobotController:
-    def __init__(self, urdf_path, tool_link_name, use_ik=True):
+    def __init__(self, urdf_path, tool_link_name, initialize_tracik=True):
         self.urdf_path = urdf_path
-        if use_ik:
+        if initialize_tracik:
             self.ik_solver: IKSolver_Wrapper = self.create_ik_solver(tool_link_name)
             self.joint_names = self.ik_solver.ik_solver.joint_names
         else:
@@ -244,7 +243,7 @@ class PandaPybulletController(RobotController):
 
 class PandaRealworldDummyController(RobotController):
     def __init__(self, urdf_path, tool_link_name):
-        super().__init__(urdf_path, tool_link_name, use_ik=False)
+        super().__init__(urdf_path, tool_link_name, initialize_tracik=False)
         self.image_rgb = None
         self.image_depth = None
         self.image_pcd = None
@@ -253,24 +252,15 @@ class PandaRealworldDummyController(RobotController):
 
     def load_dummy_data(self, path):
         data = np.load(path, allow_pickle=True)
+        print(data.keys())
 
-        if "rgb" in data:
-            self.image_rgb = data["rgb"]
-        else:
-            raise ValueError("No rgb image found")
+        self.image_rgb = data["rgb_im"]
+        self.image_depth = data["dep_im"]
+        self.camera_intrinsics = data["intrinsic"]
+        self.camera_extrinsic = data["extrinsic"]
 
-        if "extrinsic" in data:
-            self.camera_extrinsic = data["extrinsic"]
-        else:
-            raise ValueError("No camera extrinsic found")
-
-        if "depth" in data and "intrinsic" in data:
-            self.image_depth = data["depth"]
-            self.camera_intrinsics = data["intrinsic"]
-        elif "pcd" in data:
-            self.image_pcd = data["pcd"]
-        else:
-            raise ValueError("Either depth and intrinsic or pcd is needed")
+    def get_camera_extrinsic(self):
+        return self.camera_extrinsic
 
     def get_camera_param_and_robotjoint(self):
         if self.camera_intrinsics is None:
@@ -287,9 +277,6 @@ class PandaRealworldDummyController(RobotController):
 
     def capture_image(self):
         return self.image_rgb, self.image_depth, self.camera_intrinsics
-
-    def capture_pcd(self):
-        return self.image_rgb, self.image_pcd
 
     def execute_cartesian_impedance_path(self, poses, gripper_isopen, speed_factor=3):
         print(f"execute_cartesian_impedance_path: {poses} gripper_isopen={gripper_isopen} speed_factor={speed_factor}")
@@ -308,7 +295,7 @@ class PandaRealworldDummyController(RobotController):
         return True
 
     def get_current_joint_confs(self):
-        return {"qpos": np.zeros(7), "ee_pose": np.zeros(6)}
+        return {"qpos": np.zeros(7), "ee_pose": np.eye(4)}
 
     def go_to_home(self, gripper_open=False):
         print(f"go_to_home: gripper_open={gripper_open}")
@@ -326,6 +313,10 @@ class PandaRealworldDummyController(RobotController):
 class PandaRealworldController(RobotController):
     def __init__(self, urdf_path, tool_link_name):
         super().__init__(urdf_path, tool_link_name)
+        try:
+            import zmq
+        except:
+            raise ImportError('Please install zmq to use the real world controller `pip install zmq`')
         context = zmq.Context()
         socket = context.socket(zmq.REQ)
         socket.connect(FR3_CONTROLLER_ADDR)

@@ -51,7 +51,7 @@ cp kalm/configs/local_config_template.py kalm/configs/local_config.py
 You can specify the prompt (task name and description) in `TASKNAME2DESC` in `kalm/vlm_client.py`. We provide an example for data spec.
 
 ```bash
-python -m scripts.main_kalm_distill_keypoints --save_path keypoint_files/example  --task_name drawer  --data_path keypoint_files/drawer_example_traj.npz
+python -m scripts.main_kalm_distill_keypoints --save_path keypoint_files/example --use_gpt_guided_mask_in_query_image  --task_name drawer  --data_path keypoint_files/drawer_example_traj.npz
 ```
 
 ##### Data Format
@@ -86,29 +86,27 @@ bash scripts/train_kalmdiffuser.sh
 
 #### Evaluation
 
-We provide evaluation for dummy robot and real robot. You can add your own task in `configs/model_config.py`.
+We provide a sample `main_kalm_eval_robot.py` on how the trained models are used at inference time. Please modify according to your hardware setup.
 
-##### Dummy Robot from File
+For debugging purpose, we provide a dummy evaluation pipeline that can be used for visualizing the predicted trajectories. To run on your own tasks, please add the configs accordingly in `configs/model_config.py`.
+
+##### Dummy Evaluation 
 
 Run the dummy robot evaluation with observation from file.
 
 ```bash
-python -m scripts.main_kalm_eval_robot --task drawer --dummy_data_path keypoint_files/drawer_example.npz
+python -m scripts.main_kalm_eval_robot --task drawer --dummy_data_path keypoint_files/drawer_sample_eval.npz
 ```
 
 ###### Data Format
 
-We support both point cloud and depth image with intrinsic as input.
 The data is stored in a `.npz` file with the following format:
 
 ```python
 {
-    'rgb': np.array, 
+    'rgb_im': np.array, 
+    'dep_im': np.array,
     'extrinsic': np.array, 
-    # either
-    'pcd': np.array, # in camera frame
-    # or
-    'depth': np.array, 
     'intrinsic': np.array,
 }
 ```
