@@ -296,8 +296,8 @@ def draw_grid(img, nr_vertical, nr_horizontal, resize_to_max_dim: int = 0):
         cv2.line(img, (0, y), (w, y), (255, 255, 255), 3)
 
     font = cv2.FONT_HERSHEY_PLAIN
-    font_scale = 2
-    font_thickness = 3
+    font_scale = 1
+    font_thickness = 1
     text_color = (0, 0, 0)
     text_color_bg = (255, 255, 255)
     text_pad = 5

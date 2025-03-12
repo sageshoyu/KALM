@@ -11,12 +11,14 @@ from segment_anything import SamPredictor, sam_model_registry
 import kalm.configs.local_config as local_config
 from kalm.utils import approx_equal, draw_grid, draw_seg_on_im, extract_tag_content, is_degenerated_mask, resize_to
 
-GRID_SHAPE = (5, 5)
+GRID_SHAPE = (11, 5)
 
 TASKNAME2DESC = {
     "drawer": "Opening the top drawer.",
     "coffee": "Lifting the handle of the coffee machine.",
     "pour": "Pouring something into the bowl.",
+    "drawer-sticker-open": "Opening the drawer on the top with the colored dots on the handle",
+    "drawer-sticker-close": "Closing the drawer on the top with the colored dots on the handle"
 }
 
 
@@ -88,7 +90,7 @@ class GPTClient:
             ],
         }]
 
-        gpt_return_result = self.client.chat.completions.create(model="gpt-4o", messages=messages)
+        gpt_return_result = self.client.chat.completions.create(model="gpt-4o-2024-08-06", messages=messages)
         return messages, gpt_return_result
 
     def obtain_GPT_coordinate_auto(

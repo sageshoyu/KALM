@@ -192,7 +192,7 @@ def obtain_mask_from_gpt_and_sam(
     demonstration_vid_sequence: np.ndarray,
     grid_shape: tuple[int, int],
     pcd=None,
-    max_trial_loop=3,
+    max_trial_loop=5,
     vis=False,
     gpt_prev_iter_msg=None,
     iter_n=0,
