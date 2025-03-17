@@ -328,44 +328,51 @@ def main(args):
     gpt_prev_iter_mask = None
     for iter_i in range(args.max_iter_num):
         print(f">>>>>>>>>>>>>Finding consistent points. Iteration {iter_i + 1}")
-        mask_selected, gpt_returned_msg = obtain_mask_from_gpt_and_sam(
-            gpt_client,
-            mask_predictor,
-            task_desc,
-            reference_video_rgbs,
-            pcd=reference_pcd_frame0,
-            grid_shape=GRID_SHAPE,
-            vis=args.debug_level >= 1,
-            gpt_prev_iter_msg=gpt_prev_iter_mask,
-            iter_n=iter_i,
-        )
-        gpt_prev_iter_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected], cm=[[1, 0, 0]])
-        if mask_selected is None:
-            continue
-        mask_selected[ref_invalid_map] = 0
-        ref_image_with_selected_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected])
-        gpt_client_info = GPT_CLIENT_INFO(
-            gpt_client=gpt_client,
-            previous_messages=gpt_returned_msg,
-            ref_image_with_masks=ref_image_with_selected_mask,
-            sequence=reference_video_rgbs,
-            query_image=None,
-            task_desc=task_desc,
-            grid_shape=GRID_SHAPE,
-        )
-        with open("gpt_client_info.pkl", "wb") as f:
-            pickle.dump({
-                "mask": mask_selected,
-                "info": GPT_CLIENT_INFO(
-                    gpt_client=None,
-                    previous_messages=gpt_returned_msg,
-                    ref_image_with_masks=ref_image_with_selected_mask,
-                    sequence=reference_video_rgbs,
-                    query_image=None,
-                    task_desc=task_desc,
-                    grid_shape=GRID_SHAPE,
-                 )
-            }, f)
+        if args.load_cached_gpt:
+            with open("gpt_client_info.pkl", "rb") as f:
+                gpt_client_cache = pickle.load(f)
+                gpt_client_info = gpt_client_cache["info"]
+                mask_selected = gpt_client_cache["mask"]
+            gpt_client_info.gpt_client = gpt_client
+        else:
+            mask_selected, gpt_returned_msg = obtain_mask_from_gpt_and_sam(
+                gpt_client,
+                mask_predictor,
+                task_desc,
+                reference_video_rgbs,
+                pcd=reference_pcd_frame0,
+                grid_shape=GRID_SHAPE,
+                vis=args.debug_level >= 1,
+                gpt_prev_iter_msg=gpt_prev_iter_mask,
+                iter_n=iter_i,
+            )
+            gpt_prev_iter_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected], cm=[[1, 0, 0]])
+            if mask_selected is None:
+                continue
+            mask_selected[ref_invalid_map] = 0
+            ref_image_with_selected_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected])
+            gpt_client_info = GPT_CLIENT_INFO(
+                gpt_client=gpt_client,
+                previous_messages=gpt_returned_msg,
+                ref_image_with_masks=ref_image_with_selected_mask,
+                sequence=reference_video_rgbs,
+                query_image=None,
+                task_desc=task_desc,
+                grid_shape=GRID_SHAPE,
+            )
+            with open("gpt_client_info.pkl", "wb") as f:
+                pickle.dump({
+                    "mask": mask_selected,
+                    "info": GPT_CLIENT_INFO(
+                        gpt_client=None,
+                        previous_messages=gpt_returned_msg,
+                        ref_image_with_masks=ref_image_with_selected_mask,
+                        sequence=reference_video_rgbs,
+                        query_image=None,
+                        task_desc=task_desc,
+                        grid_shape=GRID_SHAPE,
+                     )
+                }, f)
 
         reference_image_record.part_mask = mask_selected
         consistent_matches_on_all_query_ims = find_consistent_match_points_on_all_query_images(
@@ -535,6 +542,9 @@ class KeypointDistillArguments(tap.Tap):
 
     # Training set parameters
     n_kp_in_training_set: int = 8
+
+    # Cache
+    load_cached_gpt: bool = False
 
 
 if __name__ == "__main__":
