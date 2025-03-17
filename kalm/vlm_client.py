@@ -18,7 +18,7 @@ TASKNAME2DESC = {
     "drawer": "Opening the top drawer.",
     "coffee": "Lifting the handle of the coffee machine.",
     "pour": "Pouring something into the bowl.",
-    "drawer-sticker-open": "Opening the drawer on the top with the colored dots on the handle",
+    "drawer-sticker-open": "Pulling the first white panel with colored dots in the middle.",
     "drawer-sticker-close": "Closing the drawer on the top with the colored dots on the handle"
 }
 
