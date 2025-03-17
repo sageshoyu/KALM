@@ -157,7 +157,8 @@ def masks_from_sam_nms(
         grid_tlbr = calc_grid_cell_tlbr(image.shape[:2], grid_shape, gpt_return_coordinate - 1)  # GPT is 1-indexed
         masks1, scores1, points1 = mask_predictor.get_candidate_masks_in_grid(
             image, *grid_tlbr,
-            min_distance=10, pcd=pcd, remove_degenerate=remove_degenerate, vis=False,
+            min_distance=10, pcd=pcd, remove_degenerate=remove_degenerate,
+            vis=True, save_path=gpt_client.cache_dir,
         )
         for msk, score, pt in zip(masks1, scores1, points1):
             for mask_already_picked in masks:

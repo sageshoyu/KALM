@@ -1,5 +1,6 @@
 import base64
 import os
+import datetime
 
 import cv2
 import torch
@@ -297,7 +298,7 @@ class MaskPredictor:
         self, im: np.ndarray, top: float, left: float, bottom: float, right: float,
         min_distance: float = 10, conf_thr=0.88,
         pcd: np.ndarray = None, remove_degenerate: bool = True,
-        vis: bool = False,
+        vis: bool = False, save_path = None
     ) -> tuple:
         self.predictor.set_image(im)
 
@@ -310,7 +311,8 @@ class MaskPredictor:
             for x in points_horizontal:
                 for y in points_vertical:
                     plt.scatter(x, y, c="r")
-            plt.show()
+            current_time = datetime.datetime.now().strftime(f'%Y%m%d%H%M%S')
+            plt.savefig(os.path.join(save_path, f"sam_promptingpoints_{current_time}.png"))
             plt.close()
 
         masks_all = []
@@ -355,6 +357,7 @@ class MaskPredictor:
                             plt.imshow(draw_seg_on_im(im, [mask], alpha=0.6))
                             plt.scatter(x, y, c="r")
                             plt.title(f"Score: {score}")
-                            plt.show()
+                            current_time = datetime.datetime.now().strftime(f'%Y%m%d%H%M%S')
+                            plt.savefig(os.path.join(save_path, f"sam_promptingpointsAndmask_{current_time}.png"))
                             plt.close()
         return masks_all, scores_all, points_all
