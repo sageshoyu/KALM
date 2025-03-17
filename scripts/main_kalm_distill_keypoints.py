@@ -530,9 +530,9 @@ class KeypointDistillArguments(tap.Tap):
     # Keypoint matching parameters
     mradius: float = 0.03
     dino_weight: float = 0.75
-    consistent_in_query_ratio: float = 0.7
+    consistent_in_query_ratio: float = 0.6
     thr_goodmatch_ratio: float = 0.6
-    goodpoint_ratio: float = 0.5
+    goodpoint_ratio: float = 0.3
     n_target_good_keypoint: int = 8
     n_candidate_points: int = 50
     n_neighbor_points: int = 10
