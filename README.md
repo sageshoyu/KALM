@@ -26,6 +26,10 @@ CoRL Workshop on Language and Robot Learning, 2024. <span style="color:#CC3333">
 }
 ```
 
+**[News]** 
+Support for the [SAM2](https://github.com/facebookresearch/sam2) backbone has been added.
+To use SAM2 for mask proposal, please follow the installation instructions from SAM2 and specify the backbone option `USE_SAM2` in `local_config.py` accordingly.
+
 ### Installation
 
 Install the dependencies using conda:

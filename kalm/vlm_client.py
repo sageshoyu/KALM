@@ -119,14 +119,14 @@ class GPTClient:
     ):
         b64_images = list()  #  base64 encoded images
         if isinstance(image_with_masks_firstframe, list):
-            instruction = "I have provided you a sequence of images. They are all based on the same image but highlighted with different masks.\n"
-            instruction += f"Please select the ID of the mask that has been previously identified as the most relevant part " f"of the object that is moved by the actuated agent, for task '{task_desc}'.\n"
+            instruction = "I have provided you a sequence of images. They are all based on the same image but highlighted in blue with mask ID number overlayed on the image.\n"
+            instruction += f"Please select the ID of the mask that has been previously identified as the most relevant part of the object that is moved by the actuated agent, for task '{task_desc}'.\n"
             instruction += "Put your answer in the format of <output>{ID}</output>\n"
             instruction += "Let's think step by step following the pattern:"
-            instruction += "image_1_mask = '...' # Describe the mask in the first image"
-            instruction += "image_2_mask = '...' # Describe the mask in the second image"
-            instruction += "..."
-            instruction += "matched_mask_ids = ['ID1', 'ID2', ...] # List all the IDs of the matched masks in the sequence"
+            instruction += "image_1_mask = '...' # Describe the mask in the first image\n"
+            instruction += "image_2_mask = '...' # Describe the mask in the second image\n"
+            instruction += "...\n"
+            instruction += "matched_mask_ids = ['ID1', 'ID2', ...] # List all the IDs of the matched masks in the sequence.\n"
             instruction += "output: <output>{ID}</output>  # return the first frame mask ID that matches the mask description."
 
             for i, img in enumerate(image_with_masks_firstframe):
@@ -284,15 +284,25 @@ class MaskPredictor:
             sam_ckpt_path = local_config.SAM_CKPT
 
         if sam_ckpt_path is None:
+            if local_config.USE_SAM2:
+                sam_online_ckpt_path = 'https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt'
+            else:
+                sam_online_ckpt_path = 'https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth'
             cache_dir = os.path.expanduser('./cache')
-            sam_ckpt_path = os.path.join(cache_dir, "sam_vit_h_4b8939.pth")
+            sam_ckpt_path = os.path.join(cache_dir, sam_online_ckpt_path.split('/')[-1])
             if not os.path.exists(sam_ckpt_path):
                 os.makedirs(cache_dir, exist_ok=True)
                 print(f'Downloading SAM checkpoint to {sam_ckpt_path}')
-                torch.hub.download_url_to_file('https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth', sam_ckpt_path)
+                torch.hub.download_url_to_file(sam_online_ckpt_path, sam_ckpt_path)
 
-        self.sam = sam_model_registry["vit_h"](checkpoint=sam_ckpt_path).to(device)
-        self.predictor = SamPredictor(self.sam)
+        if local_config.USE_SAM2:
+            from sam2.build_sam import build_sam2
+            from sam2.sam2_image_predictor import SAM2ImagePredictor
+            sam2 = build_sam2("configs/sam2.1/sam2.1_hiera_l.yaml", sam_ckpt_path)
+            self.predictor = SAM2ImagePredictor(sam2)
+        else:
+            self.sam = sam_model_registry["vit_h"](checkpoint=sam_ckpt_path).to(device)
+            self.predictor = SamPredictor(self.sam)
 
     def get_candidate_masks_in_grid(
         self, im: np.ndarray, top: float, left: float, bottom: float, right: float,
@@ -329,10 +339,9 @@ class MaskPredictor:
                     multimask_output=True,  # Set to True for better score.
                 )
                 mask_list = []
-                for mask, score in zip(masks, scores):
+                for mask, score in zip(masks.astype(bool), scores):
                     mask_list.append([mask, score])
                 mask_list.sort(key=lambda x: x[1], reverse=True)
-                mask, score = mask_list[0]
                 for mask, score in mask_list:
                     add_to_mask_lib = False
                     if score >= conf_thr:
