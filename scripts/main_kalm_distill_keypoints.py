@@ -520,7 +520,7 @@ class KeypointDistillArguments(tap.Tap):
     task_name: str
     debug_level: int = 0
     max_iter_num: int = 4
-    use_gpt_guided_mask_in_query_image: bool = True
+    use_gpt_guided_mask_in_query_image: bool = False
 
     # Feature extraction parameters
     fpfh_radius: float = 0.03
@@ -532,7 +532,8 @@ class KeypointDistillArguments(tap.Tap):
     dino_weight: float = 0.75
     consistent_in_query_ratio: float = 0.6
     thr_goodmatch_ratio: float = 0.6
-    goodpoint_ratio: float = 0.3
+    goodpoint_ratio: float = 0.4
+
     n_target_good_keypoint: int = 8
     n_candidate_points: int = 50
     n_neighbor_points: int = 10

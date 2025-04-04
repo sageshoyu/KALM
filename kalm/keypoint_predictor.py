@@ -380,10 +380,12 @@ class KeypointPredictor:
                 max(0, y - discount_neighborhood_pixel_range):min(image2_record.rgb.shape[0], y + discount_neighborhood_pixel_range),
                 max(0, x - 5):min(image2_record.rgb.shape[1], x + 5)
             ] = False
+
         return matched_keypoints
 
+    @torch.no_grad()
     def predict_keypoints_given_training_config(self, rgb_im, query_dep_im, intrinsic, extrinsic, query_pcd=None):
-        assert self.is_loaded_distilled
+        assert self.is_loaded_distilled, "The keypoint predictor should be loaded with distilled keypoints."
 
         query_rgb_im = center_crop(rgb_im)
         query_rgb = preprocess_rgb(query_rgb_im[np.newaxis, ...], self.config.im_size)[0]  # H W 3

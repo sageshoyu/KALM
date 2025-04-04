@@ -10,6 +10,8 @@
 [Tomás Lozano-Pérez](https://people.csail.mit.edu/tlp/),
 [Leslie Pack Kaelbling](https://people.csail.mit.edu/lpk/)
 <br />
+ICRA 2025
+<br />
 CoRL Workshop on Language and Robot Learning, 2024. <span style="color:#CC3333">Best Paper Award</span>
 <br />
 [[Paper]](http://arxiv.org/abs/2410.23254)
@@ -53,7 +55,7 @@ cp kalm/configs/local_config_template.py kalm/configs/local_config.py
 You can specify the prompt (task name and description) in `TASKNAME2DESC` in `kalm/vlm_client.py`. We provide an example for data spec.
 
 ```bash
-python -m scripts.main_kalm_distill_keypoints --save_path keypoint_files/example  --task_name drawer  --data_path keypoint_files/drawer_example_traj.npz
+python -m scripts.main_kalm_distill_keypoints --save_path keypoint_files/example --use_gpt_guided_mask_in_query_image  --task_name drawer  --data_path keypoint_files/drawer_example_traj.npz
 ```
 
 ##### Data Format
@@ -86,9 +88,36 @@ Train the keypoint-conditioned policy. The parameters could be found in the scri
 bash scripts/train_kalmdiffuser.sh
 ```
 
-#### Real Robot Evaluation
+#### Evaluation
 
-Run the real robot evaluation. You can add your own task in `configs/model_config.py`.
+We provide a sample `main_kalm_eval_robot.py` on how the trained models are used at inference time. Please modify according to your hardware setup.
+
+For debugging purpose, we provide a dummy evaluation pipeline that can be used for visualizing the predicted trajectories. To run on your own tasks, please add the configs accordingly in `configs/model_config.py`.
+
+##### Dummy Evaluation 
+
+Run the dummy robot evaluation with observation from file.
+
+```bash
+python -m scripts.main_kalm_eval_robot --task drawer --dummy_data_path keypoint_files/drawer_sample_eval.npz
+```
+
+###### Data Format
+
+The data is stored in a `.npz` file with the following format:
+
+```python
+{
+    'rgb_im': np.array, 
+    'dep_im': np.array,
+    'extrinsic': np.array, 
+    'intrinsic': np.array,
+}
+```
+
+##### Real Robot
+
+Run the real robot evaluation.
 
 ```bash
 python -m scripts.main_kalm_eval_robot --task drawer

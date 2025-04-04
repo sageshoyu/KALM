@@ -63,7 +63,7 @@ def visualize_prediction(
     trimesh.Scene(vis_list).show()
 
 
-def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_config):
+def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_config, dummy=False):
     robot_state_cur = robot_policy.robot_controller.get_current_joint_confs()
     current_ee_pose, current_joint_conf = (
         robot_state_cur["ee_pose"],
@@ -71,7 +71,11 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
     )
     time.sleep(1)  # wait for the robot to stabilize
 
-    extrinsic = current_ee_pose.dot(EE2CAM)
+    if not dummy:
+        # Assuming gripper camera. Please update according to the camera setup
+        extrinsic = current_ee_pose.dot(EE2CAM)
+    else:
+        extrinsic = robot_policy.robot_controller.get_camera_extrinsic()
 
     # Sample trajectories
     all_results = []
@@ -79,12 +83,30 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
         print(f">>>>>>>>>>>>>>>> Evaluating matching proposal {matching_proposal_i}")
         result_matching_proposal_i = []
 
+        # Using depth and intrinsic to get pointcloud
         rgb_im, dep_im, intrinsic = robot_policy.capture_image()
-
         kp_detection_ret = keypoint_predictor.predict_keypoints_given_training_config(rgb_im, dep_im, intrinsic, extrinsic)
 
-        (all_predicted_trajectories_modelframe, all_predicted_trajectories_worldframe, observed_pointcloud_modelframe,
-         kp_locs_selected_worldframe) = trajectory_predictor.predict_traj(kp_detection_ret, sample_n_trajectories=eval_config.sample_n_trajectories)
+        (
+            all_predicted_trajectories_modelframe,
+            all_predicted_trajectories_worldframe,
+            observed_pointcloud_modelframe,
+            kp_locs_selected_worldframe,
+        ) = trajectory_predictor.predict_traj(kp_detection_ret, sample_n_trajectories=eval_config.sample_n_trajectories)
+
+        if eval_config.vis_level >= 2:
+            visualize_prediction(
+                keypoint_predictor,
+                kp_detection_ret["query_rgb_resized"],
+                kp_detection_ret["query_pcd_resized"],
+                kp_detection_ret["kp_xy_2d"],
+                kp_detection_ret["kp_xyz_3d_pseudoworldframe"],
+                observed_pointcloud_modelframe,
+                [x[0] for x in all_predicted_trajectories_modelframe],
+            )
+
+        if dummy:
+            return None
 
         pointcloud_worldframe = get_pointcloud(dep_im, intrinsic, extrinsic, near=eval_config.depth_near, frame="world")
         obstacle_cloud_in_world_frame_ = pointcloud_worldframe.reshape(-1, 3)
@@ -97,17 +119,6 @@ def run_policy(robot_policy, keypoint_predictor, trajectory_predictor, eval_conf
             >= 0.05
         ).T.all(axis=1)
         obstacle_cloud_in_world_frame_proposal_i = obstacle_cloud_in_world_frame[not_close_to_kp]
-
-        if eval_config.vis_level >= 2:
-            visualize_prediction(
-                keypoint_predictor,
-                kp_detection_ret["query_rgb_resized"],
-                kp_detection_ret["query_pcd_resized"],
-                kp_detection_ret["kp_xy_2d"],
-                kp_detection_ret["kp_xyz_3d_pseudoworldframe"],
-                observed_pointcloud_modelframe,
-                [x[0] for x in all_predicted_trajectories_modelframe],
-            )
 
         for traj_i, (
             predicted_ee_poses_in_world_frame_mat4,
@@ -243,7 +254,7 @@ def free_motion(config, robot_policy):
         print("Enter free motion mode")
         robot_policy.robot_controller.free_motion(gripper_open=True, timeout=config.freemotion_timeout)
         rgb_im, dep_im, intrinsic = robot_policy.capture_image()
-        assert dep_im.max() < 500  # range in m (not mm)
+        assert dep_im is None or dep_im.max() < 500, "Problem with depth!"  # range in m (not mm)
 
         im_h, im_w = rgb_im.shape[:2]
         min_hw = min(im_h, im_w)
@@ -261,7 +272,14 @@ def free_motion(config, robot_policy):
 
 
 def benchmarking(benchmarking_config):
-    robot_policy = initialize_robot_policy(debug=False)
+    if benchmarking_config.dummy:
+        print("Using dummy policy and data.")
+        assert benchmarking_config.dummy_data_path is not None, "Please provide dummy data path."
+        robot_policy = initialize_robot_policy(dummy=True, debug=False)
+        robot_policy.robot_controller.load_dummy_data(benchmarking_config.dummy_data_path)
+    else:
+        print("Using real robot controller and data.")
+        robot_policy = initialize_robot_policy(debug=False)
     keypoint_predictors, trajectory_predictors = [], []
     for config in benchmarking_config.individual_configs:
         keypoint_predictors.append(KeypointPredictor(config=config))
@@ -276,7 +294,7 @@ def benchmarking(benchmarking_config):
         for config_i, (keypoint_predictor, trajectory_predictor, config) in enumerate(zip(
             keypoint_predictors, trajectory_predictors, benchmarking_config.individual_configs,
         )):
-            statistics_config_i = run_policy(robot_policy, keypoint_predictor, trajectory_predictor, config)
+            statistics_config_i = run_policy(robot_policy, keypoint_predictor, trajectory_predictor, config, dummy=benchmarking_config.dummy)
             if statistics_config_i is None:
                 print(f"Config {config_i} execution error.")
                 statistics_config_i = {}
@@ -295,15 +313,20 @@ class EvalConfig(dict):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_dir", default="debug", type=str, help="directory to dump eval stats")
-    parser.add_argument("--task", required=True, type=str, choices=["kcup", "drawer"], help="robot task")
+    parser.add_argument("--task", required=True, type=str, help="robot task")
     parser.add_argument("--free_sec", type=float, default=3, help="timeout for each free motion iter")
     parser.add_argument("--eval_iter", type=int, default=50, help="number of iterations")
+    parser.add_argument("--dummy_data_path", type=str, default=None, help="path to dummy data")
     args = parser.parse_args()
-
+    
+    assert args.task in config_mapping, f"Task {args.task} not found in config_mapping. You can add it in kalm/configs/model_config.py"
+    
     eval_global_config = EvalConfig(
         individual_configs=[config_mapping[args.task]],
         save_dir="eval_robot_runs/" + "test_" + args.task,
         eval_iter=args.eval_iter,
         freemotion_timeout=args.free_sec,
+        dummy=args.dummy_data_path is not None,
+        dummy_data_path=args.dummy_data_path,
     )
     benchmarking(eval_global_config)
