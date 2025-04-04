@@ -157,7 +157,8 @@ def masks_from_sam_nms(
         grid_tlbr = calc_grid_cell_tlbr(image.shape[:2], grid_shape, gpt_return_coordinate - 1)  # GPT is 1-indexed
         masks1, scores1, points1 = mask_predictor.get_candidate_masks_in_grid(
             image, *grid_tlbr,
-            min_distance=10, pcd=pcd, remove_degenerate=remove_degenerate, vis=False,
+            min_distance=10, pcd=pcd, remove_degenerate=remove_degenerate,
+            vis=True, save_path=gpt_client.cache_dir,
         )
         for msk, score, pt in zip(masks1, scores1, points1):
             for mask_already_picked in masks:
@@ -192,7 +193,7 @@ def obtain_mask_from_gpt_and_sam(
     demonstration_vid_sequence: np.ndarray,
     grid_shape: tuple[int, int],
     pcd=None,
-    max_trial_loop=3,
+    max_trial_loop=5,
     vis=False,
     gpt_prev_iter_msg=None,
     iter_n=0,
@@ -327,44 +328,51 @@ def main(args):
     gpt_prev_iter_mask = None
     for iter_i in range(args.max_iter_num):
         print(f">>>>>>>>>>>>>Finding consistent points. Iteration {iter_i + 1}")
-        mask_selected, gpt_returned_msg = obtain_mask_from_gpt_and_sam(
-            gpt_client,
-            mask_predictor,
-            task_desc,
-            reference_video_rgbs,
-            pcd=reference_pcd_frame0,
-            grid_shape=GRID_SHAPE,
-            vis=args.debug_level >= 1,
-            gpt_prev_iter_msg=gpt_prev_iter_mask,
-            iter_n=iter_i,
-        )
-        gpt_prev_iter_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected], cm=[[1, 0, 0]])
-        if mask_selected is None:
-            continue
-        mask_selected[ref_invalid_map] = 0
-        ref_image_with_selected_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected])
-        gpt_client_info = GPT_CLIENT_INFO(
-            gpt_client=gpt_client,
-            previous_messages=gpt_returned_msg,
-            ref_image_with_masks=ref_image_with_selected_mask,
-            sequence=reference_video_rgbs,
-            query_image=None,
-            task_desc=task_desc,
-            grid_shape=GRID_SHAPE,
-        )
-        with open("gpt_client_info.pkl", "wb") as f:
-            pickle.dump({
-                "mask": mask_selected,
-                "info": GPT_CLIENT_INFO(
-                    gpt_client=None,
-                    previous_messages=gpt_returned_msg,
-                    ref_image_with_masks=ref_image_with_selected_mask,
-                    sequence=reference_video_rgbs,
-                    query_image=None,
-                    task_desc=task_desc,
-                    grid_shape=GRID_SHAPE,
-                 )
-            }, f)
+        if args.load_cached_gpt:
+            with open("gpt_client_info.pkl", "rb") as f:
+                gpt_client_cache = pickle.load(f)
+                gpt_client_info = gpt_client_cache["info"]
+                mask_selected = gpt_client_cache["mask"]
+            gpt_client_info.gpt_client = gpt_client
+        else:
+            mask_selected, gpt_returned_msg = obtain_mask_from_gpt_and_sam(
+                gpt_client,
+                mask_predictor,
+                task_desc,
+                reference_video_rgbs,
+                pcd=reference_pcd_frame0,
+                grid_shape=GRID_SHAPE,
+                vis=args.debug_level >= 1,
+                gpt_prev_iter_msg=gpt_prev_iter_mask,
+                iter_n=iter_i,
+            )
+            gpt_prev_iter_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected], cm=[[1, 0, 0]])
+            if mask_selected is None:
+                continue
+            mask_selected[ref_invalid_map] = 0
+            ref_image_with_selected_mask = draw_seg_on_im(reference_video_rgbs[0], [mask_selected])
+            gpt_client_info = GPT_CLIENT_INFO(
+                gpt_client=gpt_client,
+                previous_messages=gpt_returned_msg,
+                ref_image_with_masks=ref_image_with_selected_mask,
+                sequence=reference_video_rgbs,
+                query_image=None,
+                task_desc=task_desc,
+                grid_shape=GRID_SHAPE,
+            )
+            with open("gpt_client_info.pkl", "wb") as f:
+                pickle.dump({
+                    "mask": mask_selected,
+                    "info": GPT_CLIENT_INFO(
+                        gpt_client=None,
+                        previous_messages=gpt_returned_msg,
+                        ref_image_with_masks=ref_image_with_selected_mask,
+                        sequence=reference_video_rgbs,
+                        query_image=None,
+                        task_desc=task_desc,
+                        grid_shape=GRID_SHAPE,
+                     )
+                }, f)
 
         reference_image_record.part_mask = mask_selected
         consistent_matches_on_all_query_ims = find_consistent_match_points_on_all_query_images(
@@ -522,9 +530,10 @@ class KeypointDistillArguments(tap.Tap):
     # Keypoint matching parameters
     mradius: float = 0.03
     dino_weight: float = 0.75
-    consistent_in_query_ratio: float = 0.7
+    consistent_in_query_ratio: float = 0.6
     thr_goodmatch_ratio: float = 0.6
     goodpoint_ratio: float = 0.4
+
     n_target_good_keypoint: int = 8
     n_candidate_points: int = 50
     n_neighbor_points: int = 10
@@ -534,6 +543,9 @@ class KeypointDistillArguments(tap.Tap):
 
     # Training set parameters
     n_kp_in_training_set: int = 8
+
+    # Cache
+    load_cached_gpt: bool = False
 
 
 if __name__ == "__main__":

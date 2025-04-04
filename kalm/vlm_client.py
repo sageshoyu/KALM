@@ -1,5 +1,6 @@
 import base64
 import os
+import datetime
 
 import cv2
 import torch
@@ -11,12 +12,14 @@ from segment_anything import SamPredictor, sam_model_registry
 import kalm.configs.local_config as local_config
 from kalm.utils import approx_equal, draw_grid, draw_seg_on_im, extract_tag_content, is_degenerated_mask, resize_to
 
-GRID_SHAPE = (5, 5)
+GRID_SHAPE = (11, 5)
 
 TASKNAME2DESC = {
     "drawer": "Opening the top drawer.",
     "coffee": "Lifting the handle of the coffee machine.",
     "pour": "Pouring something into the bowl.",
+    "drawer-sticker-open": "Pulling the first white panel with colored dots in the middle.",
+    "drawer-sticker-close": "Closing the drawer on the top with the colored dots on the handle"
 }
 
 
@@ -88,7 +91,7 @@ class GPTClient:
             ],
         }]
 
-        gpt_return_result = self.client.chat.completions.create(model="gpt-4o", messages=messages)
+        gpt_return_result = self.client.chat.completions.create(model="gpt-4o-2024-08-06", messages=messages)
         return messages, gpt_return_result
 
     def obtain_GPT_coordinate_auto(
@@ -305,7 +308,7 @@ class MaskPredictor:
         self, im: np.ndarray, top: float, left: float, bottom: float, right: float,
         min_distance: float = 10, conf_thr=0.88,
         pcd: np.ndarray = None, remove_degenerate: bool = True,
-        vis: bool = False,
+        vis: bool = False, save_path = None
     ) -> tuple:
         self.predictor.set_image(im)
 
@@ -318,7 +321,8 @@ class MaskPredictor:
             for x in points_horizontal:
                 for y in points_vertical:
                     plt.scatter(x, y, c="r")
-            plt.show()
+            current_time = datetime.datetime.now().strftime(f'%Y%m%d%H%M%S')
+            plt.savefig(os.path.join(save_path, f"sam_promptingpoints_{current_time}.png"))
             plt.close()
 
         masks_all = []
@@ -362,6 +366,7 @@ class MaskPredictor:
                             plt.imshow(draw_seg_on_im(im, [mask], alpha=0.6))
                             plt.scatter(x, y, c="r")
                             plt.title(f"Score: {score}")
-                            plt.show()
+                            current_time = datetime.datetime.now().strftime(f'%Y%m%d%H%M%S')
+                            plt.savefig(os.path.join(save_path, f"sam_promptingpointsAndmask_{current_time}.png"))
                             plt.close()
         return masks_all, scores_all, points_all

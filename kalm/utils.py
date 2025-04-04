@@ -287,17 +287,18 @@ def draw_grid(img, nr_vertical, nr_horizontal, resize_to_max_dim: int = 0):
     if resize_to_max_dim > 0:
         img = resize_to(img, resize_to_max_dim)
 
+    line_thickness = 2
     h, w = img.shape[:2]
     for i in range(1, nr_vertical):
         x = i * w // nr_vertical
-        cv2.line(img, (x, 0), (x, h), (255, 255, 255), 3)
+        cv2.line(img, (x, 0), (x, h), (255, 255, 255), line_thickness)
     for i in range(1, nr_horizontal):
         y = i * h // nr_horizontal
-        cv2.line(img, (0, y), (w, y), (255, 255, 255), 3)
+        cv2.line(img, (0, y), (w, y), (255, 255, 255), line_thickness)
 
     font = cv2.FONT_HERSHEY_PLAIN
-    font_scale = 2
-    font_thickness = 3
+    font_scale = 1
+    font_thickness = 1
     text_color = (0, 0, 0)
     text_color_bg = (255, 255, 255)
     text_pad = 5

@@ -25,6 +25,8 @@ RLBench/
 *$py.class
 *.pth
 *.pkl
+*.npz
+*.txt
 
 *.log-????????
 .vim*
