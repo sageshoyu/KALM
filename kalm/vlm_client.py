@@ -12,14 +12,16 @@ from segment_anything import SamPredictor, sam_model_registry
 import kalm.configs.local_config as local_config
 from kalm.utils import approx_equal, draw_grid, draw_seg_on_im, extract_tag_content, is_degenerated_mask, resize_to
 
-GRID_SHAPE = (11, 5)
+GRID_SHAPE = (5, 5)
 
 TASKNAME2DESC = {
     "drawer": "Opening the top drawer.",
     "coffee": "Lifting the handle of the coffee machine.",
     "pour": "Pouring something into the bowl.",
     "drawer-sticker-open": "Pulling the first white panel with colored dots in the middle.",
-    "drawer-sticker-close": "Closing the drawer on the top with the colored dots on the handle"
+    "drawer-sticker-close": "Pushing the first white panel with colored dots in the middle.",
+    "drawer-lid-open": "Lifting the lid on top of the white panel with yellow handle near the colored dots.",
+    "drawer-lid-close": "Closing the lid with the yellow handle.",
 }
 
 
@@ -63,7 +65,10 @@ class GPTClient:
         img_prompt += "For example, if the agent is trying to grasp something, please identify the object part in the scene that the held object is interacted with."
         img_prompt += "For example, if the agent is trying to put something into a container, please identify the object part of the container that the agent is interacting with."
         img_prompt += "Let's think step by step folling the following pattern:" "task = '...' # Describe the task" "object_parts_in_the_task = ['object_1'] # Identify the object in the task"
-        img_prompt += "After analyzing the object part, please localize the object part in the given image." "We have provided a coordinate grid to help you identify the target object part. " "Please return the grid IDs of the object part in the image. " "<output>{grid_id1} {grid_id2} ...</output>"
+        img_prompt += "After analyzing the object part, please localize the object part in the given image."
+        img_prompt += "We have provided a coordinate grid to help you identify the target object part. "
+        img_prompt += "Please pay attention to the **first** image. Please return the grid IDs of the object part in the first image."
+        img_prompt += "<output>{grid_id1} {grid_id2} ...</output>"
 
         images = list()
         b64_images = list()  #  base64 encoded images
