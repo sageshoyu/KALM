@@ -145,7 +145,7 @@ class GPTClient:
             raise NotImplementedError("Not updated.")
 
         if gpt_prev_iter_msg is not None:
-            instruction += f"The mask you selected previously is shown in red. That is not the correct option. Please select another one."
+            instruction += f"The mask you selected previously is outlined in red. That is not the correct option. Please select another one."
             img = resize_to(gpt_prev_iter_msg, 512)
             save_path = os.path.join(self.cache_dir, f"sammasks_previter_{iter_n}.png")
             cv2.imwrite(save_path, img[..., ::-1])

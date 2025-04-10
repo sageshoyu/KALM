@@ -1,5 +1,5 @@
 import random
-
+import argparse
 import numpy as np
 import torch
 import trimesh
@@ -189,9 +189,9 @@ class KeypointDataset(Dataset):
         return ret_dict
 
 
-def visualize_trajectory():
+def visualize_trajectory(filename):
     # Visualize the training trajectories
-    dset = KeypointDataset("keypoint_files/example/kalmdiffuser_train.npz", augment_axis=[2])
+    dset = KeypointDataset(filename, augment_axis=[2])
     print(len(dset))
     ret_traj_all = []
     pcd_all = []
@@ -210,4 +210,7 @@ def visualize_trajectory():
 
 
 if __name__ == "__main__":
-    visualize_trajectory()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--file', type=str, default="keypoint_files/example/kalmdiffuser_train.npz", help='keypoint file to visualize')
+    args = parser.parse_args()
+    visualize_trajectory(args.file)

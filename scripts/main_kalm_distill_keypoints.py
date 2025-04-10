@@ -511,6 +511,61 @@ def save_as_kalmdiffuser_record(
     print(f"Training set saved. {len(dataset)} samples.")
 
 
+def visualize_kalmdiffuser_record(args):
+    (
+        reference_video_rgbs,
+        reference_video_pcds,
+        verification_rgbs,
+        verification_pcds,
+        verification_dataset_robot_trajectories,
+    ) = read_data_from_file(
+        args.data_path,
+        video_subsample_num_frames=args.ref_seq_len,
+        input_size=args.im_size,
+    )
+
+    verification_image_records = [
+        ImageRecord(
+            verification_rgbs[i],
+            verification_pcds[i],
+            None,
+            None,
+        )
+        for i in range(len(verification_rgbs))
+    ]
+    dataset = np.load(args.dataset_path, allow_pickle=True)["data"]
+    keypoint_3dloc_alignz_frames = [dataset_record['keypoint_xyz'] for dataset_record in dataset]
+
+    for verification_image_record, keypoint_3dloc_alignz_frame, trajectory_data in zip(
+        verification_image_records,
+        keypoint_3dloc_alignz_frames,
+        verification_dataset_robot_trajectories,
+    ):
+        camera_extrinsic = trajectory_data["extrinsic"]
+
+        updated_campose = get_alignz_campose(camera_extrinsic)
+        rotate_matrix = np.linalg.inv(updated_campose).dot(camera_extrinsic)
+        ee_poses_trajectory = np.einsum(
+            "ij, bjk -> bik",
+            np.linalg.inv(updated_campose),
+            trajectory_data["ee_poses_worldframe_trajectory"],
+        )
+
+        pointcloud_camera_frame = verification_image_record.pcd
+        pointcloud_alignz_frame = transform_pointcloud(rotate_matrix, pointcloud_camera_frame.reshape(-1, 3), set_invalid=True).reshape(*pointcloud_camera_frame.shape[:2], 3)
+
+        if True:
+            pcd1 = trimesh.points.PointCloud(pointcloud_alignz_frame.reshape(-1, 3))
+            pcd1.colors = np.array([1.0, 0, 0])
+            pcd2 = trimesh.points.PointCloud(camera_extrinsic[:3, 3].reshape(1, 3))
+            pcd2.colors = np.array([0, 1.0, 0])
+            pcd3 = trimesh.points.PointCloud(ee_poses_trajectory[:, :3, 3])
+            pcd3.colors = np.array([0, 1.0, 1.0])
+            pcd4 = trimesh.points.PointCloud(keypoint_3dloc_alignz_frame)
+            pcd4.colors = np.array([0, 0.5, 1.0])
+            trimesh.Scene([pcd1, pcd2, pcd3, pcd4]).show()
+
+
 class KeypointDistillArguments(tap.Tap):
     # Data paths
     data_path: str
@@ -547,9 +602,17 @@ class KeypointDistillArguments(tap.Tap):
     # Cache
     load_cached_gpt: bool = False
 
+    # Vis
+    check_distilled_keypoints: bool = False
+    dataset_path: str = None
+
 
 if __name__ == "__main__":
     args = KeypointDistillArguments().parse_args()
+
+    if args.check_distilled_keypoints:
+        visualize_kalmdiffuser_record(args)
+        exit(0)
 
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
